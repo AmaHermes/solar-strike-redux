@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Solar Strike Redux</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    background: #0a0418;
+    color: #fff4dc;
+    font-family: monospace;
+    height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  h1 { margin: 8px; letter-spacing: 4px; color: #e85d2c; text-shadow: 2px 2px 0 #7a1e6e; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; box-shadow: 0 0 32px #7a1e6e; }
+  .hint { margin-top: 8px; opacity: 0.7; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>SOLAR STRIKE</h1>
+  <div id="game"></div>
+  <div class="hint">Arrows / WASD = move &nbsp;·&nbsp; Auto-fire &nbsp;·&nbsp; M = music &nbsp;·&nbsp; N = SFX</div>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+  <script src="audio.js"></script>
+  <script src="sketch.js"></script>
+</body>
+</html>
