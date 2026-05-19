@@ -154,6 +154,17 @@ function updatePlayer() {
   if (dx && dy) { dx *= 0.707; dy *= 0.707; }
   player.x += dx * player.speed;
   player.y += dy * player.speed;
+
+  // Touch input: drag-offset model.
+  // While finger is down, ship tracks finger movement (in game-space units)
+  // since the last frame. This means the finger can rest anywhere on screen —
+  // it doesn't have to be on the ship — and feels great on mobile shmups.
+  if (Touch.active) {
+    player.x += Touch.dx;
+    player.y += Touch.dy;
+    Touch.dx = 0; Touch.dy = 0;
+  }
+
   player.x = constrain(player.x, player.w/2, GB_W - player.w/2);
   player.y = constrain(player.y, player.h/2, GB_H - player.h/2);
 
@@ -748,3 +759,74 @@ function drawWinOverlay(g) {
   g.fill(PAL.orange);
   if (frameCount % 60 < 40) g.text('SPACE TO REPLAY', 36, 110);
 }
+
+// ---------- TOUCH INPUT ----------
+// Drag-offset model: tracks delta movement between frames and feeds it
+// into updatePlayer(). Works for landscape + portrait, any screen size,
+// because we convert CSS pixels → game-space units using the canvas's
+// own bounding box. So a 1 cm drag is roughly the same nudge whether
+// the player is on a 4" phone or a desktop monitor.
+const Touch = {
+  active: false,
+  lastX: 0, lastY: 0,
+  dx: 0, dy: 0,
+  // Sensitivity multiplier — drag distance in game pixels per CSS pixel of finger travel.
+  // Game is 160 wide; canvas might be ~400 CSS px on phones, so 160/400 ≈ 0.4 native.
+  // We compute this dynamically from canvas size, with a 1.2× boost for snappy feel.
+  sens: 1.0,
+};
+
+function recomputeTouchSens() {
+  const cnv = document.querySelector('#game canvas');
+  if (!cnv) return;
+  const rect = cnv.getBoundingClientRect();
+  if (rect.width <= 0) return;
+  Touch.sens = (GB_W / rect.width) * 1.2;
+}
+
+function touchStarted(event) {
+  Audio.resume();
+  // First tap on title/gameover/win = start, like SPACE does on keyboard
+  if (state === 'title' || state === 'gameover' || state === 'win') {
+    resetGame();
+    state = 'play';
+    Audio.startMusic();
+    // Don't drag the player on the same tap that started the game
+    Touch.active = false;
+    return false;
+  }
+  if (touches && touches.length > 0) {
+    recomputeTouchSens();
+    Touch.active = true;
+    Touch.lastX = touches[0].x;
+    Touch.lastY = touches[0].y;
+    Touch.dx = 0;
+    Touch.dy = 0;
+  }
+  // returning false prevents the browser default (scroll, zoom, etc.)
+  return false;
+}
+
+function touchMoved(event) {
+  if (!Touch.active || !touches || touches.length === 0) return false;
+  const nx = touches[0].x;
+  const ny = touches[0].y;
+  // touches[].x/.y are in canvas CSS pixels; convert to game-space delta.
+  Touch.dx += (nx - Touch.lastX) * Touch.sens;
+  Touch.dy += (ny - Touch.lastY) * Touch.sens;
+  Touch.lastX = nx;
+  Touch.lastY = ny;
+  return false;
+}
+
+function touchEnded(event) {
+  if (!touches || touches.length === 0) {
+    Touch.active = false;
+    Touch.dx = 0; Touch.dy = 0;
+  }
+  return false;
+}
+
+// Recompute sensitivity when the viewport changes (rotate, resize)
+window.addEventListener('resize', recomputeTouchSens);
+window.addEventListener('orientationchange', () => setTimeout(recomputeTouchSens, 100));

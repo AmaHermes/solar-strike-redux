@@ -2,27 +2,135 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0418">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Solar Strike Redux</title>
 <style>
+  :root {
+    --sky:    #1a0b2e;
+    --bg:     #0a0418;
+    --mag:    #7a1e6e;
+    --orange: #e85d2c;
+    --yellow: #f5c26b;
+    --cream:  #fff4dc;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
   html, body {
     margin: 0; padding: 0;
-    background: #0a0418;
-    color: #fff4dc;
+    background: var(--bg);
+    color: var(--cream);
     font-family: monospace;
+    width: 100%;
     height: 100%;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
     overflow: hidden;
+    /* Respect notch / home indicator on iOS */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+             env(safe-area-inset-bottom) env(safe-area-inset-left);
+    /* Disable text selection on touch hold */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    /* Prevent overscroll bounce on iOS */
+    overscroll-behavior: none;
   }
-  h1 { margin: 8px; letter-spacing: 4px; color: #e85d2c; text-shadow: 2px 2px 0 #7a1e6e; }
-  canvas { image-rendering: pixelated; image-rendering: crisp-edges; box-shadow: 0 0 32px #7a1e6e; }
-  .hint { margin-top: 8px; opacity: 0.7; font-size: 12px; }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(4px, 1.5vmin, 12px);
+  }
+
+  h1 {
+    margin: 0;
+    letter-spacing: clamp(2px, 1vmin, 4px);
+    font-size: clamp(16px, 4.5vmin, 28px);
+    color: var(--orange);
+    text-shadow: 2px 2px 0 var(--mag);
+  }
+
+  /* Square responsive frame — the secret sauce.
+     Uses vmin (the smaller of viewport width/height) and leaves headroom for
+     title + hint. Capped at 640px so it doesn't get cartoonishly big on desktop. */
+  #game-frame {
+    width: min(85vmin, 92vw, 640px);
+    aspect-ratio: 1 / 1;
+    flex-shrink: 0;
+    background: var(--sky);
+    box-shadow:
+      0 0 32px var(--mag),
+      inset 0 0 0 2px var(--mag);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    border-radius: clamp(4px, 1vmin, 10px);
+  }
+
+  /* The canvas fills the square frame's width and letterboxes via its own aspect ratio.
+     Game is 160:144 (10:9) so small bands appear top + bottom — pure indigo, matching frame.
+     !important needed because p5 sets inline style="width:Xpx; height:Ypx" on the canvas. */
+  #game-frame canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    display: block;
+    width: 100% !important;
+    height: auto !important;
+    max-height: 100%;
+    /* CRITICAL: prevents iOS from scrolling/pinching when finger drags on canvas */
+    touch-action: none;
+  }
+
+  .hint {
+    text-align: center;
+    opacity: 0.75;
+    font-size: clamp(9px, 1.8vmin, 13px);
+    line-height: 1.4;
+    max-width: 92vw;
+  }
+
+  /* Show keyboard hint on devices with hover/pointer (desktop), touch hint on phones */
+  .hint-keyboard { display: block; }
+  .hint-touch    { display: none; }
+
+  @media (hover: none) and (pointer: coarse) {
+    .hint-keyboard { display: none; }
+    .hint-touch    { display: block; }
+  }
+
+  /* Tighten layout further on very small screens */
+  @media (max-height: 600px) {
+    h1 { font-size: clamp(12px, 3.5vmin, 18px); }
+    .hint { font-size: 10px; }
+  }
+
+  /* Landscape phones: shrink title aggressively, prioritize game area */
+  @media (orientation: landscape) and (max-height: 500px) {
+    body { gap: 4px; }
+    h1 { font-size: 14px; margin: 0; }
+    #game-frame { width: min(90vmin, 90vh); }
+    .hint { font-size: 9px; }
+  }
 </style>
 </head>
 <body>
   <h1>SOLAR STRIKE</h1>
-  <div id="game"></div>
-  <div class="hint">Arrows / WASD = move &nbsp;·&nbsp; Auto-fire &nbsp;·&nbsp; M = music &nbsp;·&nbsp; N = SFX</div>
+  <div id="game-frame">
+    <div id="game"></div>
+  </div>
+  <div class="hint hint-keyboard">
+    Arrows / WASD = move &nbsp;·&nbsp; Auto-fire &nbsp;·&nbsp; M = music &nbsp;·&nbsp; N = SFX &nbsp;·&nbsp; SPACE = start
+  </div>
+  <div class="hint hint-touch">
+    Drag anywhere to fly &nbsp;·&nbsp; Auto-fire &nbsp;·&nbsp; Tap to start
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
   <script src="audio.js"></script>
   <script src="sketch.js"></script>
