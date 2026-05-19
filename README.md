@@ -1,6 +1,6 @@
 # Solar Strike Redux 🌅🚀
 
-[![Solar Strike Redux thumbnail](assets/social-preview.png)](https://amahermes.github.io/solar-strike-redux/)
+[![Solar Strike Redux cartridge](assets/social-preview-cart.jpg)](https://amahermes.github.io/solar-strike-redux/)
 
 A modern, colorized homage to **Solar Striker** (Game Boy, 1990) — a vertical-scrolling shoot-'em-up. Built with p5.js so it runs in any browser.
 

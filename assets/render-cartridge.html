@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>cart</title>
+<style>html,body{margin:0;background:#0a0418}canvas{display:block}</style>
+</head><body>
+<canvas id="c" width="1280" height="640"></canvas>
+<script>
+const PAL = {
+  sky1:'#1a0b2e', sky2:'#3a1a55', mag:'#7a1e6e', pink:'#c43d8a',
+  orange:'#e85d2c', yellow:'#f5c26b', hot:'#ffb070', cream:'#fff4dc',
+  white:'#ffffff', black:'#06020e',
+  // Cartridge plastic — solar-tinted gray (warmer than DMG's true gray)
+  plasticHi:'#d8c8b8', plastic:'#a89888', plasticLo:'#786858', plasticDark:'#483828',
+  labelBeige:'#f3e3c8', labelDark:'#2a1830',
+};
+const cnv = document.getElementById('c');
+const ctx = cnv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const W = 1280, H = 640;
+function rng(seed){ let x = Math.sin(seed)*10000; return x - Math.floor(x); }
+
+// ===== Background: deep cosmic gradient =====
+const grad = ctx.createLinearGradient(0, 0, 0, H);
+grad.addColorStop(0.00, '#0a0418');
+grad.addColorStop(0.50, PAL.sky1);
+grad.addColorStop(1.00, PAL.mag);
+ctx.fillStyle = grad;
+ctx.fillRect(0, 0, W, H);
+
+// scattered stars
+for (let i=0; i<140; i++){
+  const x = rng(i*1.7)*W, y = rng(i*2.3)*H;
+  const sz = rng(i*3.1)>0.85 ? 3 : (rng(i*4.1)>0.5 ? 2 : 1);
+  ctx.fillStyle = rng(i*5.1)>0.6 ? PAL.cream : PAL.yellow;
+  ctx.fillRect(Math.floor(x), Math.floor(y), sz, sz);
+}
+
+// Soft sun glow behind cartridge
+const sunGlow = ctx.createRadialGradient(W*0.5, H*0.55, 50, W*0.5, H*0.55, 360);
+sunGlow.addColorStop(0, 'rgba(232,93,44,0.55)');
+sunGlow.addColorStop(0.5, 'rgba(122,30,110,0.35)');
+sunGlow.addColorStop(1, 'rgba(0,0,0,0)');
+ctx.fillStyle = sunGlow;
+ctx.fillRect(0, 0, W, H);
+
+// ===== THE CARTRIDGE =====
+// Classic Game Boy cart silhouette, drawn as chunky pixels.
+// Dimensions roughly mirror real DMG carts (proportions ~ 65:64) but stylized.
+// Rendered with a slight 3D right-edge shadow for depth.
+
+const CART_CX = W * 0.5;
+const CART_CY = H * 0.50;
+const CART_W = 460;   // body width
+const CART_H = 480;   // body height (taller than wide, like real cart)
+const cx0 = CART_CX - CART_W/2;
+const cy0 = CART_CY - CART_H/2;
+
+// Drop shadow under cart
+ctx.fillStyle = 'rgba(0,0,0,0.55)';
+ctx.fillRect(cx0 + 18, cy0 + 18, CART_W, CART_H);
+
+function rect(x,y,w,h,c){ ctx.fillStyle = c; ctx.fillRect(x,y,w,h); }
+
+// ----- Cartridge plastic body with rounded top corners (drawn via stepped rects) -----
+// Outer dark outline
+rect(cx0, cy0, CART_W, CART_H, PAL.plasticDark);
+// Highlight pass — body
+rect(cx0 + 4, cy0 + 4, CART_W - 8, CART_H - 8, PAL.plastic);
+// Top-left inner highlight bevel
+rect(cx0 + 4, cy0 + 4, CART_W - 8, 6, PAL.plasticHi);
+rect(cx0 + 4, cy0 + 4, 6, CART_H - 8, PAL.plasticHi);
+// Bottom-right inner shadow bevel
+rect(cx0 + 4, cy0 + CART_H - 10, CART_W - 8, 6, PAL.plasticLo);
+rect(cx0 + CART_W - 10, cy0 + 4, 6, CART_H - 8, PAL.plasticLo);
+
+// Top "notch" — Game Boy carts have a recessed area on the top edge.
+// We'll do a chunky pixel approximation: a 30px-tall band with a step on the left
+const NOTCH_H = 34;
+rect(cx0 + 4, cy0 + 4, CART_W - 8, NOTCH_H, PAL.plasticDark);
+rect(cx0 + 8, cy0 + 8, CART_W - 16, NOTCH_H - 8, PAL.plasticLo);
+// Step in notch (right side has a step down — that's the cart "lip")
+rect(cx0 + 60, cy0 + 4, 8, NOTCH_H, PAL.plastic);
+// little screws / vents in the notch
+rect(cx0 + CART_W - 60, cy0 + 18, 6, 6, PAL.plasticDark);
+rect(cx0 + CART_W - 50, cy0 + 18, 6, 6, PAL.plasticDark);
+
+// ----- LABEL: the colorful sticker portion -----
+const LBL_PAD = 22;
+const LBL_X = cx0 + LBL_PAD;
+const LBL_Y = cy0 + NOTCH_H + 18;
+const LBL_W = CART_W - LBL_PAD * 2;
+const LBL_H = CART_H - NOTCH_H - LBL_PAD * 2 - 18;
+
+// Label dark border (printed edge)
+rect(LBL_X - 4, LBL_Y - 4, LBL_W + 8, LBL_H + 8, PAL.labelDark);
+
+// Label sunset gradient (top → bottom inside label)
+const lgrad = ctx.createLinearGradient(0, LBL_Y, 0, LBL_Y + LBL_H);
+lgrad.addColorStop(0.00, PAL.sky1);
+lgrad.addColorStop(0.40, PAL.mag);
+lgrad.addColorStop(0.65, PAL.orange);
+lgrad.addColorStop(0.90, PAL.yellow);
+lgrad.addColorStop(1.00, PAL.cream);
+ctx.fillStyle = lgrad;
+ctx.fillRect(LBL_X, LBL_Y, LBL_W, LBL_H);
+
+// Stars on label (top portion)
+for (let i = 0; i < 50; i++){
+  const x = LBL_X + rng(i*7.3) * LBL_W;
+  const y = LBL_Y + rng(i*9.1) * LBL_H * 0.45;
+  const sz = rng(i*3.7) > 0.8 ? 2 : 1;
+  ctx.fillStyle = rng(i*5.5) > 0.5 ? PAL.cream : PAL.yellow;
+  ctx.fillRect(Math.floor(x), Math.floor(y), sz, sz);
+}
+
+// Pixel sun on label (top-right corner of label)
+function pCircle(cx, cy, r, color, step=4){
+  ctx.fillStyle = color;
+  for (let py = -r; py <= r; py += step) {
+    const span = Math.floor(Math.sqrt(r*r - py*py));
+    ctx.fillRect(Math.floor(cx - span), Math.floor(cy + py), span*2, step);
+  }
+}
+const sunX = LBL_X + LBL_W - 70, sunY = LBL_Y + 80;
+// rays
+ctx.save();
+ctx.translate(sunX, sunY);
+for (let i = 0; i < 12; i++){
+  ctx.save();
+  ctx.rotate((i/12) * Math.PI * 2);
+  ctx.fillStyle = PAL.hot;
+  ctx.globalAlpha = 0.45;
+  ctx.fillRect(45, -2, 90, 4);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+ctx.restore();
+pCircle(sunX, sunY, 38, PAL.orange, 4);
+pCircle(sunX, sunY, 26, PAL.yellow, 4);
+pCircle(sunX, sunY, 14, PAL.cream, 4);
+
+// ----- TITLE on label: "SOLAR / STRIKE" stacked, chunky =====
+function titleLayer(text, cx, cy, fs, stack){
+  ctx.font = `900 ${fs}px "Courier New", monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const l of stack){
+    ctx.fillStyle = l.color;
+    ctx.fillText(text, cx + l.ox, cy + l.oy);
+  }
+}
+titleLayer('SOLAR', LBL_X + LBL_W/2 - 30, LBL_Y + 70, 64, [
+  { color: PAL.black,  ox: 4, oy: 4 },
+  { color: PAL.mag,    ox: 2, oy: 2 },
+  { color: PAL.cream,  ox: 0, oy: 0 },
+]);
+titleLayer('STRIKE', LBL_X + LBL_W/2 - 30, LBL_Y + 130, 64, [
+  { color: PAL.black,  ox: 4, oy: 4 },
+  { color: PAL.mag,    ox: 2, oy: 2 },
+  { color: PAL.yellow, ox: 0, oy: 0 },
+]);
+
+// "REDUX" badge - small spaced text below
+ctx.font = '700 20px "Courier New", monospace';
+ctx.fillStyle = PAL.black;
+ctx.fillText('R E D U X', LBL_X + LBL_W/2 + 2, LBL_Y + 170);
+ctx.fillStyle = PAL.cream;
+ctx.fillText('R E D U X', LBL_X + LBL_W/2, LBL_Y + 168);
+
+// ----- Hero ship + lasers on lower portion of label -----
+function ship(cx, cy, s){
+  // wings
+  rect(cx - 9*s, cy + 1*s, 18*s, 3*s, PAL.mag);
+  rect(cx - 7*s, cy + 0*s, 14*s, 1*s, PAL.orange);
+  rect(cx - 9*s, cy + 4*s, 18*s, 1*s, PAL.yellow);
+  // tips
+  rect(cx - 9*s, cy + 1*s, 1*s, 2*s, PAL.cream);
+  rect(cx + 8*s, cy + 1*s, 1*s, 2*s, PAL.cream);
+  // body
+  rect(cx - 2*s, cy - 5*s, 4*s, 9*s, PAL.mag);
+  rect(cx - 1*s, cy - 5*s, 2*s, 9*s, PAL.orange);
+  // nose
+  rect(cx - 1*s, cy - 6*s, 2*s, 1*s, PAL.cream);
+  // cockpit
+  rect(cx - 1*s, cy - 3*s, 2*s, 2*s, PAL.cream);
+  // engine glow
+  rect(cx - 2*s, cy + 4*s, 4*s, 1*s, PAL.yellow);
+  rect(cx - 1*s, cy + 5*s, 2*s, 2*s, PAL.cream);
+  rect(cx, cy + 7*s, 1*s, 1*s, PAL.hot);
+}
+const SHIP_X = LBL_X + LBL_W/2;
+const SHIP_Y = LBL_Y + LBL_H - 70;
+ship(SHIP_X, SHIP_Y, 3);
+
+// upward laser beams
+for (let i = -1; i <= 1; i++){
+  const x = SHIP_X + i * 9;
+  rect(x - 2, SHIP_Y - 90, 4, 70, PAL.orange);
+  rect(x - 1, SHIP_Y - 90, 2, 70, PAL.yellow);
+  rect(x,     SHIP_Y - 90, 1, 70, PAL.cream);
+}
+
+// Tiny UFO silhouettes on label (top-left area)
+function miniUFO(cx, cy){
+  rect(cx - 1, cy - 2, 2, 1, PAL.cream);
+  rect(cx - 4, cy - 1, 8, 1, PAL.pink);
+  rect(cx - 5, cy,     10, 1, PAL.mag);
+  rect(cx - 3, cy + 1, 6, 1, PAL.orange);
+}
+miniUFO(LBL_X + 50,  LBL_Y + 240);
+miniUFO(LBL_X + 90,  LBL_Y + 220);
+miniUFO(LBL_X + 30,  LBL_Y + 270);
+miniUFO(LBL_X + 130, LBL_Y + 250);
+
+// Subtitle banner near bottom of label
+rect(LBL_X + 16, LBL_Y + LBL_H - 32, LBL_W - 32, 22, PAL.mag);
+rect(LBL_X + 16, LBL_Y + LBL_H - 34, LBL_W - 32, 2, PAL.orange);
+ctx.font = '700 12px "Courier New", monospace';
+ctx.fillStyle = PAL.cream;
+ctx.textAlign = 'center';
+ctx.fillText('A SUNSET RUN', LBL_X + LBL_W/2, LBL_Y + LBL_H - 21);
+
+// "NINTENDO GAME BOY" style header on the label (small, retro)
+ctx.font = '700 11px "Courier New", monospace';
+ctx.fillStyle = PAL.cream;
+ctx.fillText('★ HERMES INTERACTIVE ★', LBL_X + LBL_W/2, LBL_Y + 20);
+
+// ----- Sticker scuff & shine details to sell the "physical cart" feel -----
+// diagonal shine across the label
+ctx.save();
+ctx.globalAlpha = 0.10;
+ctx.fillStyle = PAL.white;
+ctx.beginPath();
+ctx.moveTo(LBL_X, LBL_Y + 30);
+ctx.lineTo(LBL_X + 60, LBL_Y);
+ctx.lineTo(LBL_X + 90, LBL_Y);
+ctx.lineTo(LBL_X, LBL_Y + 60);
+ctx.closePath();
+ctx.fill();
+ctx.restore();
+
+// Tiny "1990 → 2026" tag at bottom of cart, on plastic below label
+ctx.font = '700 13px "Courier New", monospace';
+ctx.fillStyle = PAL.plasticDark;
+ctx.fillText('© 1990 → 2026  AMAHERMES', CART_CX, cy0 + CART_H - 16);
+
+// ===== Side accents / text outside the cart =====
+// Left: "INSERT" arrow pointing at cart
+ctx.font = '900 22px "Courier New", monospace';
+ctx.fillStyle = PAL.cream;
+ctx.textAlign = 'right';
+ctx.fillText('INSERT →', cx0 - 24, H * 0.46);
+ctx.font = '700 14px "Courier New", monospace';
+ctx.fillStyle = PAL.yellow;
+ctx.fillText('any browser', cx0 - 24, H * 0.46 + 24);
+
+// Right: "PLAY" badge
+ctx.textAlign = 'left';
+ctx.font = '900 22px "Courier New", monospace';
+ctx.fillStyle = PAL.cream;
+ctx.fillText('← PRESS', cx0 + CART_W + 24, H * 0.46);
+ctx.font = '700 14px "Courier New", monospace';
+ctx.fillStyle = PAL.yellow;
+ctx.fillText('to play 🌅', cx0 + CART_W + 24, H * 0.46 + 24);
+
+// scanline overlay
+ctx.globalAlpha = 0.10;
+ctx.fillStyle = '#000';
+for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+ctx.globalAlpha = 1;
+
+// vignette
+const vg = ctx.createRadialGradient(W/2, H/2, H*0.35, W/2, H/2, H*0.9);
+vg.addColorStop(0, 'rgba(0,0,0,0)');
+vg.addColorStop(1, 'rgba(0,0,0,0.6)');
+ctx.fillStyle = vg;
+ctx.fillRect(0, 0, W, H);
+
+window.__ready = true;
+</script>
+</body></html>
