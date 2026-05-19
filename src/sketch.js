@@ -102,11 +102,31 @@ function keyPressed() {
     Audio.startMusic();
     return;
   }
-  if ((state === 'title' || state === 'gameover' || state === 'win') &&
-      (key === ' ' || key === 'Enter' || keyCode === 13)) {
-    resetGame();
-    state = 'play';
-    Audio.startMusic();
+  // Stage select from title / gameover / win: press 1 or 2 to start that stage
+  // with full kit. Useful for demos. Stage 1 still defaults to SPACE.
+  if (state === 'title' || state === 'gameover' || state === 'win') {
+    if (key === '1') {
+      resetGame();
+      state = 'play';
+      Audio.startMusic();
+      return;
+    }
+    if (key === '2') {
+      resetGame();
+      setStage(2);
+      // Loadout: max spread + both new weapons so the demo is loud
+      player.power = 3;
+      player.homing = 2;
+      player.plasma = 1;
+      state = 'play';
+      Audio.startMusic();
+      return;
+    }
+    if (key === ' ' || key === 'Enter' || keyCode === 13) {
+      resetGame();
+      state = 'play';
+      Audio.startMusic();
+    }
   }
 }
 
@@ -877,13 +897,22 @@ function drawScene() {
 
 function drawTitleOverlay(g) {
   g.fill(PAL.cream); g.textFont('monospace');
-  g.textSize(14); g.text('SOLAR STRIKE', 28, 50);
+  g.textSize(14); g.text('SOLAR STRIKE', 28, 46);
   g.fill(PAL.orange);
-  g.textSize(8); g.text('STAGE 1: SUNSET RUN', 24, 70);
-  g.fill(PAL.yellow);
-  if (frameCount % 60 < 40) g.text('PRESS SPACE TO START', 22, 100);
+  g.textSize(6); g.text('STAGE SELECT', 50, 62);
+  // Stage 1 option
+  g.fill(PAL.yellow); g.textSize(7);
+  g.text('[1] SUNSET RUN',  38, 78);
+  // Stage 2 option (loaded out for demo)
+  g.fill(PAL.cream); g.textSize(7);
+  g.text('[2] AURORA RUN',  38, 90);
   g.fill(PAL.mag); g.textSize(6);
-  g.text('ARROWS/WASD MOVE - AUTOFIRE', 18, 130);
+  g.text('(full kit demo)', 50, 100);
+  // Default action
+  g.fill(PAL.yellow); g.textSize(7);
+  if (frameCount % 60 < 40) g.text('SPACE = STAGE 1', 32, 118);
+  g.fill(PAL.mag); g.textSize(6);
+  g.text('ARROWS/WASD - AUTOFIRE', 24, 132);
 }
 function drawGameOverOverlay(g) {
   // Black-out backdrop for that XCOPY "death TV" mood
