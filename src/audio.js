@@ -12,6 +12,8 @@ const Audio = (() => {
   let musicTimer = null;
   let musicStep = 0;
   let musicStartTime = 0;
+  let unlocked = false;       // true once iOS has truly unlocked audio
+  let pendingMusic = false;   // queued music start while waiting for unlock
 
   function ensure() {
     if (ctx) return;
@@ -27,10 +29,44 @@ const Audio = (() => {
     sfxGain.connect(masterGain);
   }
 
+  // The canonical iOS Safari unlock pattern:
+  // (1) call ctx.resume() during a user gesture, AND
+  // (2) actually PLAY a tiny silent buffer source within that same gesture.
+  // Without (2), some iOS versions keep audio muted even though ctx.state === 'running'.
   function resume() {
     ensure();
-    if (ctx.state === 'suspended') ctx.resume();
+    if (unlocked) {
+      // Even if already unlocked, a backgrounded tab may have suspended us — kick again.
+      if (ctx.state === 'suspended') ctx.resume();
+      return;
+    }
+    // (1) resume the context
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(checkUnlocked).catch(() => {});
+    }
+    // (2) play a 1-sample silent buffer to fully unlock iOS audio
+    try {
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      if (src.start) src.start(0); else src.noteOn(0); // .noteOn is Safari < 6
+    } catch (e) { /* shrug — best-effort */ }
+    checkUnlocked();
   }
+
+  function checkUnlocked() {
+    if (unlocked) return;
+    if (ctx && ctx.state === 'running') {
+      unlocked = true;
+      // If music was requested before we unlocked, start it now.
+      if (pendingMusic) {
+        pendingMusic = false;
+        startMusic();
+      }
+    }
+  }
+
 
   // ---------- LOW-LEVEL SYNTH ----------
   // A retro-style "voice": oscillator + amp envelope, optional pitch sweep.
@@ -182,6 +218,12 @@ const Audio = (() => {
   function startMusic() {
     if (!musicOn || musicTimer) return;
     ensure();
+    // On mobile, the context may not be unlocked yet on the very first tap.
+    // Queue the start so it kicks off the moment ctx hits 'running'.
+    if (!unlocked) {
+      pendingMusic = true;
+      return;
+    }
     musicStartTime = ctx.currentTime + 0.1;
     musicStep = 0;
     scheduleAhead();
@@ -263,4 +305,28 @@ const Audio = (() => {
     get musicOn() { return musicOn; },
     get sfxOn()   { return sfxOn;   },
   };
+})();
+
+// ===== iOS / Mobile audio unlock — belt & braces =====
+// Attach one-shot unlock handlers at document level so we catch the FIRST
+// real user gesture regardless of where it lands (touchstart, touchend,
+// mousedown, keydown, click). Once unlocked, listeners self-remove.
+(function attachAudioUnlock() {
+  const events = ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'];
+  function unlock() {
+    if (typeof Audio !== 'undefined') Audio.resume();
+    // give iOS one tick to actually flip ctx.state, then unbind
+    setTimeout(() => {
+      events.forEach(ev => document.removeEventListener(ev, unlock, true));
+    }, 0);
+  }
+  events.forEach(ev => document.addEventListener(ev, unlock, true));
+
+  // Also re-resume audio if the tab comes back from background (iOS suspends
+  // the context when you switch apps; without this, audio just dies silently).
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && typeof Audio !== 'undefined') {
+      Audio.resume();
+    }
+  });
 })();
