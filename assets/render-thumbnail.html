@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>thumb</title>
+<style>html,body{margin:0;background:#0a0418}canvas{display:block}</style>
+</head><body>
+<canvas id="c" width="1280" height="640"></canvas>
+<script>
+const PAL = {
+  sky1:   '#1a0b2e',
+  sky2:   '#3a1a55',
+  mag:    '#7a1e6e',
+  pink:   '#c43d8a',
+  orange: '#e85d2c',
+  yellow: '#f5c26b',
+  hot:    '#ffb070',
+  cream:  '#fff4dc',
+  white:  '#ffffff',
+  black:  '#06020e',
+};
+
+const cnv = document.getElementById('c');
+const ctx = cnv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const W = 1280, H = 640;
+
+// Helper: deterministic pseudo-random
+function rng(seed) { let x = Math.sin(seed) * 10000; return x - Math.floor(x); }
+
+// ===== 1. SUNSET GRADIENT BACKGROUND =====
+const grad = ctx.createLinearGradient(0, 0, 0, H);
+grad.addColorStop(0.00, PAL.sky1);
+grad.addColorStop(0.35, PAL.mag);
+grad.addColorStop(0.62, PAL.orange);
+grad.addColorStop(0.85, PAL.yellow);
+grad.addColorStop(1.00, PAL.cream);
+ctx.fillStyle = grad;
+ctx.fillRect(0, 0, W, H);
+
+// ===== 2. STARFIELD (top portion only) =====
+for (let i = 0; i < 180; i++) {
+  const x = rng(i * 1.7) * W;
+  const y = rng(i * 2.3) * H * 0.45;
+  const size = rng(i * 3.1) > 0.85 ? 3 : (rng(i * 4.1) > 0.5 ? 2 : 1);
+  const c = rng(i * 5.1) > 0.6 ? PAL.cream : PAL.yellow;
+  ctx.fillStyle = c;
+  ctx.fillRect(Math.floor(x), Math.floor(y), size, size);
+}
+
+// ===== 3. DISTANT SUN — upper right, smaller, atmospheric =====
+function pixelCircle(cx, cy, r, color, step = 6) {
+  ctx.fillStyle = color;
+  for (let py = -r; py <= r; py += step) {
+    const span = Math.floor(Math.sqrt(r * r - py * py));
+    ctx.fillRect(Math.floor(cx - span), Math.floor(cy + py), span * 2, step);
+  }
+}
+const SUN_X = W * 0.88, SUN_Y = H * 0.30;
+// Sun rays first (behind sun)
+ctx.save();
+ctx.translate(SUN_X, SUN_Y);
+for (let i = 0; i < 16; i++) {
+  const a = (i / 16) * Math.PI * 2;
+  ctx.save();
+  ctx.rotate(a);
+  ctx.fillStyle = PAL.hot;
+  ctx.globalAlpha = 0.45;
+  ctx.fillRect(80, -3, 380, 6);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+ctx.restore();
+pixelCircle(SUN_X, SUN_Y, 80, PAL.orange, 8);
+pixelCircle(SUN_X, SUN_Y, 55, PAL.yellow, 8);
+pixelCircle(SUN_X, SUN_Y, 30, PAL.cream, 6);
+
+// ===== 4. UFO SWARM — clear saucer silhouettes in V-formation =====
+function ufo(cx, cy, scale = 1) {
+  const s = scale;
+  // dome (top)
+  ctx.fillStyle = PAL.cream;
+  ctx.fillRect(cx - 2*s, cy - 3*s, 4*s, 1*s);
+  ctx.fillRect(cx - 3*s, cy - 2*s, 6*s, 1*s);
+  // saucer body (wide)
+  ctx.fillStyle = PAL.pink;
+  ctx.fillRect(cx - 7*s, cy - 1*s, 14*s, 2*s);
+  ctx.fillStyle = PAL.mag;
+  ctx.fillRect(cx - 8*s, cy + 1*s, 16*s, 1*s);
+  ctx.fillStyle = PAL.orange;
+  ctx.fillRect(cx - 6*s, cy + 2*s, 12*s, 1*s);
+  // glow window
+  ctx.fillStyle = PAL.yellow;
+  ctx.fillRect(cx - 1*s, cy - 2*s, 2*s, 1*s);
+  // underlight dots
+  ctx.fillStyle = PAL.hot;
+  ctx.fillRect(cx - 5*s, cy + 1*s, 1*s, 1*s);
+  ctx.fillRect(cx + 4*s, cy + 1*s, 1*s, 1*s);
+  ctx.fillRect(cx, cy + 1*s, 1*s, 1*s);
+}
+// V-formation, big lead UFO + smaller wingmates
+ufo(W * 0.22, H * 0.30, 7);
+ufo(W * 0.12, H * 0.20, 5);
+ufo(W * 0.32, H * 0.20, 5);
+ufo(W * 0.06, H * 0.36, 4);
+ufo(W * 0.38, H * 0.36, 4);
+
+// Enemy laser shots coming down from the swarm
+for (let i = 0; i < 4; i++) {
+  const x = W * (0.15 + rng(i * 7.1) * 0.20);
+  const y1 = H * 0.35;
+  const y2 = H * 0.50 + rng(i * 8.3) * 60;
+  ctx.fillStyle = PAL.orange;
+  ctx.fillRect(x, y1, 3, y2 - y1);
+  ctx.fillStyle = PAL.yellow;
+  ctx.fillRect(x + 1, y1, 1, y2 - y1);
+}
+
+// ===== 5. HERO SHIP — big, bold, lower-center, charging up-right =====
+// Drawn at higher resolution then composited. Reads as a swept-wing fighter.
+function heroShip(cx, cy, scale = 1) {
+  const s = scale;
+  // ====== Wing shadow plate ======
+  ctx.fillStyle = PAL.black;
+  ctx.fillRect(cx - 18*s, cy + 3*s, 36*s, 5*s);
+
+  // ====== Main wing — long, swept, magenta with orange leading edge ======
+  ctx.fillStyle = PAL.mag;
+  // wing body shape (trapezoid-ish in pixels)
+  ctx.fillRect(cx - 18*s, cy + 1*s, 36*s, 4*s);
+  ctx.fillRect(cx - 14*s, cy - 1*s, 28*s, 2*s);
+  // orange leading edge
+  ctx.fillStyle = PAL.orange;
+  ctx.fillRect(cx - 14*s, cy - 1*s, 28*s, 1*s);
+  ctx.fillRect(cx - 16*s, cy + 1*s, 32*s, 1*s);
+  // yellow underline highlight
+  ctx.fillStyle = PAL.yellow;
+  ctx.fillRect(cx - 17*s, cy + 5*s, 34*s, 1*s);
+
+  // wing tips (cream tips for that "fast" look)
+  ctx.fillStyle = PAL.cream;
+  ctx.fillRect(cx - 18*s, cy + 2*s, 2*s, 2*s);
+  ctx.fillRect(cx + 16*s, cy + 2*s, 2*s, 2*s);
+
+  // ====== Fuselage — tall vertical body ======
+  ctx.fillStyle = PAL.mag;
+  ctx.fillRect(cx - 4*s, cy - 8*s, 8*s, 14*s);
+  ctx.fillStyle = PAL.orange;
+  ctx.fillRect(cx - 3*s, cy - 8*s, 6*s, 14*s);
+  ctx.fillStyle = PAL.yellow;
+  ctx.fillRect(cx - 2*s, cy - 7*s, 4*s, 12*s);
+
+  // ====== Nose — sharp triangle ======
+  ctx.fillStyle = PAL.cream;
+  ctx.fillRect(cx - 2*s, cy - 10*s, 4*s, 1*s);
+  ctx.fillRect(cx - 1*s, cy - 11*s, 2*s, 1*s);
+
+  // ====== Cockpit canopy — cream w/ yellow glint ======
+  ctx.fillStyle = PAL.cream;
+  ctx.fillRect(cx - 2*s, cy - 5*s, 4*s, 3*s);
+  ctx.fillStyle = PAL.white;
+  ctx.fillRect(cx - 1*s, cy - 5*s, 1*s, 1*s);
+
+  // ====== Side intakes / details ======
+  ctx.fillStyle = PAL.black;
+  ctx.fillRect(cx - 4*s, cy - 2*s, 1*s, 4*s);
+  ctx.fillRect(cx + 3*s, cy - 2*s, 1*s, 4*s);
+
+  // ====== Engine glow + thrust trail ======
+  ctx.fillStyle = PAL.yellow;
+  ctx.fillRect(cx - 3*s, cy + 6*s, 6*s, 1*s);
+  ctx.fillStyle = PAL.cream;
+  ctx.fillRect(cx - 2*s, cy + 7*s, 4*s, 2*s);
+  ctx.fillStyle = PAL.white;
+  ctx.fillRect(cx - 1*s, cy + 7*s, 2*s, 2*s);
+  // tail flames (variable length pixels)
+  ctx.fillStyle = PAL.hot;
+  ctx.fillRect(cx - 2*s, cy + 9*s, 1*s, 2*s);
+  ctx.fillRect(cx + 1*s, cy + 9*s, 1*s, 2*s);
+  ctx.fillStyle = PAL.orange;
+  ctx.fillRect(cx - 1*s, cy + 9*s, 2*s, 3*s);
+}
+const SHIP_X = W * 0.50, SHIP_Y = H * 0.66;
+heroShip(SHIP_X, SHIP_Y, 6);
+
+// ===== 6. HERO LASER STREAKS — emanating from nose, going up =====
+// three parallel beams of decreasing intensity
+const NOSE_X = SHIP_X, NOSE_Y = SHIP_Y - 66; // ship top
+for (let i = -1; i <= 1; i++) {
+  const x = NOSE_X + i * 18;
+  // outer glow
+  ctx.fillStyle = PAL.orange;
+  ctx.fillRect(x - 3, NOSE_Y - 240, 6, 240);
+  // inner beam
+  ctx.fillStyle = PAL.yellow;
+  ctx.fillRect(x - 2, NOSE_Y - 240, 4, 240);
+  // core
+  ctx.fillStyle = PAL.cream;
+  ctx.fillRect(x - 1, NOSE_Y - 240, 2, 240);
+  // bright impact tip
+  ctx.fillStyle = PAL.white;
+  ctx.fillRect(x - 1, NOSE_Y - 240, 2, 30);
+}
+
+// ===== 7. EXPLOSION — top of a destroyed UFO at end of central beam =====
+function explosion(cx, cy, r) {
+  // outer cream sparks
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const d = r * (0.9 + rng(i * 11.7) * 0.4);
+    ctx.fillStyle = i % 2 ? PAL.cream : PAL.yellow;
+    ctx.fillRect(Math.floor(cx + Math.cos(a) * d), Math.floor(cy + Math.sin(a) * d), 5, 5);
+  }
+  // 8-point star spikes
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(a);
+    ctx.fillStyle = PAL.cream;
+    ctx.fillRect(r * 0.4, -4, r * 0.8, 8);
+    ctx.fillStyle = PAL.yellow;
+    ctx.fillRect(r * 0.4, -2, r * 0.6, 4);
+    ctx.restore();
+  }
+  pixelCircle(cx, cy, r * 0.6, PAL.orange, 6);
+  pixelCircle(cx, cy, r * 0.45, PAL.yellow, 6);
+  pixelCircle(cx, cy, r * 0.25, PAL.cream, 4);
+  pixelCircle(cx, cy, r * 0.12, PAL.white, 4);
+}
+explosion(NOSE_X, NOSE_Y - 240 + 20, 50);
+
+// ===== 8. TITLE: "SOLAR STRIKE" — chunky pixel layered =====
+function pixelTitle(text, cx, cy, fontSize, fillStack) {
+  ctx.font = `900 ${fontSize}px "Courier New", monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const layer of fillStack) {
+    ctx.fillStyle = layer.color;
+    ctx.fillText(text, cx + layer.ox, cy + layer.oy);
+  }
+}
+// Title bar — big, hugs the top, with strong outline
+pixelTitle('SOLAR STRIKE', W * 0.5, H * 0.10, 88, [
+  { color: PAL.black,  ox:  6, oy:  6 },
+  { color: PAL.mag,    ox:  4, oy:  4 },
+  { color: PAL.orange, ox:  2, oy:  2 },
+  { color: PAL.cream,  ox:  0, oy:  0 },
+]);
+// Subtitle: REDUX with accent
+pixelTitle('R E D U X', W * 0.5, H * 0.20, 36, [
+  { color: PAL.black,  ox:  3, oy:  3 },
+  { color: PAL.yellow, ox:  0, oy:  0 },
+]);
+
+// ===== 9. BOTTOM TAGLINE STRIPE =====
+ctx.fillStyle = PAL.black;
+ctx.fillRect(0, H - 56, W, 56);
+ctx.fillStyle = PAL.mag;
+ctx.fillRect(0, H - 56, W, 4);
+ctx.fillStyle = PAL.orange;
+ctx.fillRect(0, H - 60, W, 4);
+ctx.font = '700 22px "Courier New", monospace';
+ctx.fillStyle = PAL.cream;
+ctx.textAlign = 'center';
+ctx.textBaseline = 'middle';
+ctx.fillText('LASERS · PHOTON BURSTS · ALIEN SWARMS · A SUNSET RUN', W * 0.5, H - 28);
+
+// ===== 10. "PLAY IN BROWSER" stamp top-right =====
+const STAMP_X = W - 210, STAMP_Y = 24;
+ctx.fillStyle = PAL.black;
+ctx.fillRect(STAMP_X - 4, STAMP_Y - 4, 200, 54);
+ctx.fillStyle = PAL.cream;
+ctx.fillRect(STAMP_X, STAMP_Y, 192, 46);
+ctx.fillStyle = PAL.orange;
+ctx.fillRect(STAMP_X + 4, STAMP_Y + 4, 184, 38);
+ctx.font = '900 18px "Courier New", monospace';
+ctx.fillStyle = PAL.cream;
+ctx.textAlign = 'center';
+ctx.textBaseline = 'middle';
+ctx.fillText('▶ PLAY IN BROWSER', STAMP_X + 96, STAMP_Y + 23);
+
+// ===== 11. SCANLINE OVERLAY =====
+ctx.globalAlpha = 0.10;
+ctx.fillStyle = '#000';
+for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+ctx.globalAlpha = 1;
+
+// ===== 12. VIGNETTE =====
+const vg = ctx.createRadialGradient(W/2, H/2, H*0.35, W/2, H/2, H*0.9);
+vg.addColorStop(0, 'rgba(0,0,0,0)');
+vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+ctx.fillStyle = vg;
+ctx.fillRect(0, 0, W, H);
+
+window.__ready = true;
+</script>
+</body></html>
