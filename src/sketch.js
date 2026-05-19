@@ -26,6 +26,14 @@ const PALETTES = {
     yellow: '#5dffa0',    // aurora green (replaces yellow)
     cream:  '#e8f9ff',    // cool cream
   },
+  // Stage 3 — Corona Inferno (inside the sun)
+  3: {
+    sky:    '#3a0a05',    // deep crimson — burning sky
+    mag:    '#8c1e08',    // dark red ember
+    orange: '#ff7722',    // bright plasma orange
+    yellow: '#ffd84a',    // hot yellow
+    cream:  '#fff6dc',    // white-hot core
+  },
 };
 let PAL = PALETTES[1];
 
@@ -54,6 +62,20 @@ const plasmaShots = [];    // player plasma orbs (Stage 2 weapon)
 const auroras = [];        // animated aurora curtain bands (Stage 2 BG)
 const iceShards = [];      // drifting ice shards (Stage 2 BG)
 const comets = [];         // occasional comets streaking (Stage 2 BG)
+
+// Stage 3 — Corona Inferno BG state
+const heatBands = [];      // distorted horizontal heat-wave bands
+const embers   = [];       // ember particles drifting UPWARD (convection)
+const sunArcs  = [];       // plasma arcs flickering across screen
+const flare = {            // solar flare warning + sweep system
+  active: false,           // beam currently sweeping
+  warning: 0,              // frames remaining of warning blink (before beam fires)
+  y: 0,                    // y-position of the beam center
+  height: 16,              // beam thickness
+  sweepT: 0,               // frames since beam started
+  sweepDur: 40,            // total frames the beam is on screen
+  cooldown: 480,           // frames until next warning (8s at 60fps)
+};
 
 const player = {
   x: GB_W / 2,
@@ -122,6 +144,17 @@ function keyPressed() {
       Audio.startMusic();
       return;
     }
+    if (key === '3') {
+      resetGame();
+      setStage(3);
+      // Full kit — corona is brutal, you'll need everything
+      player.power = 3;
+      player.homing = 2;
+      player.plasma = 1;
+      state = 'play';
+      Audio.startMusic();
+      return;
+    }
     if (key === ' ' || key === 'Enter' || keyCode === 13) {
       resetGame();
       state = 'play';
@@ -168,7 +201,9 @@ function setStage(n) {
   stageTime = 0;
   bossSpawned = false;
   boss = null;
-  if (n === 1) initStars(); else initAuroraBG();
+  if (n === 1)      initStars();
+  else if (n === 2) initAuroraBG();
+  else              initCoronaBG();
 }
 function resetGame() {
   score = 0; lives = 3;
@@ -190,7 +225,9 @@ function updateWin()      { updateStars(); updateParticles(); }
 // ---------- MAIN PLAY UPDATE ----------
 function updatePlay() {
   stageTime++;
-  if (stage === 2) updateAuroraBG(); else updateStars();
+  if (stage === 2)      updateAuroraBG();
+  else if (stage === 3) updateCoronaBG();
+  else                  updateStars();
   updatePlayer();
   updateBullets();
   updateHomingShots();
@@ -227,6 +264,18 @@ function updatePlay() {
       homingShots.length = 0; plasmaShots.length = 0;
       player.x = GB_W / 2; player.y = GB_H - 24;
       invuln = 90;
+    } else if (stage === 2) {
+      // Advance to Stage 3 — into the sun
+      state = 'stagecard';
+      stageCardTimer = 0;
+      Audio.stopMusic();
+      Audio.stageClear();
+      setStage(3);
+      bullets.length = 0; eBullets.length = 0;
+      enemies.length = 0; powerups.length = 0;
+      homingShots.length = 0; plasmaShots.length = 0;
+      player.x = GB_W / 2; player.y = GB_H - 24;
+      invuln = 90;
     } else {
       state = 'win';
       Audio.stopMusic();
@@ -244,7 +293,9 @@ function updateStageCard() {
     Audio.startMusic();
   }
   // Animate background even on transition card
-  if (stage === 2) updateAuroraBG(); else updateStars();
+  if (stage === 2)      updateAuroraBG();
+  else if (stage === 3) updateCoronaBG();
+  else                  updateStars();
 }
 
 // ---------- STARFIELD ----------
@@ -406,7 +457,7 @@ function spawnLogic() {
     if (stageTime > 1200 && stageTime % 200 === 0) {
       enemies.push(makeDiver(random(20, GB_W - 20), -8));
     }
-  } else {
+  } else if (stage === 2) {
     // ---------- STAGE 2: AURORA RUN ----------
     // Boss "Iceheart" after 50s
     if (stageTime > 3000) {
@@ -433,6 +484,37 @@ function spawnLogic() {
       const cx = random(30, GB_W - 30);
       enemies.push(makeIceFighter(cx - 10, -8));
       enemies.push(makeIceFighter(cx + 10, -8));
+    }
+  } else {
+    // ---------- STAGE 3: CORONA INFERNO ----------
+    // Boss "Eye of Sol" after 55s — slightly longer build-up
+    if (stageTime > 3300) {
+      bossSpawned = true;
+      spawnEyeOfSol();
+      return;
+    }
+    // Pyrons — heat-wave swimmers, frequent
+    if (stageTime % 70 === 0) {
+      enemies.push(makePyron(random(16, GB_W - 16), -8));
+    }
+    // Sunspots — appear in the playfield, bloom into ring-burst
+    if (stageTime > 240 && stageTime % 220 === 0) {
+      enemies.push(makeSunspot(random(24, GB_W - 24), random(20, GB_H * 0.45)));
+    }
+    // Helix bombers — paired enemies linked by a beam, after 10s
+    if (stageTime > 600 && stageTime % 340 === 0) {
+      const cx = random(40, GB_W - 40);
+      const a = makeHelixBomber(cx - 12, -8);
+      const b = makeHelixBomber(cx + 12, -8);
+      a.partner = b; b.partner = a;
+      enemies.push(a); enemies.push(b);
+    }
+    // Pyron school
+    if (stageTime % 480 === 240) {
+      const cx = random(30, GB_W - 30);
+      for (let k = -1; k <= 1; k++) {
+        enemies.push(makePyron(cx + k * 14, -8 - Math.abs(k) * 8));
+      }
     }
   }
 }
@@ -525,11 +607,64 @@ function updateEnemies() {
       e.x += e.vx; e.y += e.vy;
       // gentle gravity toward bottom so they don't loiter forever
       e.vy = Math.min(e.vy + 0.012, 1.4);
+    } else if (e.kind === 'pyron') {
+      // Sinusoidal swim — like a heat-wave fish
+      e.y += e.vy;
+      e.x = e.baseX + Math.sin(e.t * 0.08) * e.amp;
+      // breathes plasma forward every so often
+      if (e.t % 75 === 0 && e.y > 8 && e.y < GB_H * 0.7) {
+        // small spread of 2 aimed-at-player shots
+        const sp = 1.5;
+        fireAtPlayer(e.x, e.y + 4, sp);
+      }
+    } else if (e.kind === 'sunspot') {
+      // Grows in place, then bursts. Stationary.
+      // Stages: 0..60 birth (grow w 2→10), 60..120 hold, 120 burst.
+      if (e.t === 120) {
+        // Ring burst
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          eBullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 1.4, vy: Math.sin(a) * 1.4 });
+        }
+        spark(e.x, e.y, PAL.cream, 12);
+        Audio.enemyExplode();
+        e.hp = 0; // mark for removal via collision-effect path
+        // Manually remove (no points)
+        enemies.splice(i, 1);
+        continue;
+      }
+      // visual size for collision uses e.w which scales over birth
+      const grow = Math.min(1, e.t / 60);
+      e.w = 4 + Math.floor(grow * 8);
+      e.h = e.w;
+    } else if (e.kind === 'helixBomber') {
+      e.y += e.vy;
+      // mild side drift opposite to partner if partner alive
+      if (e.partner && enemies.indexOf(e.partner) !== -1) {
+        // Maintain a target distance via spring; pulls them in slightly
+        const targetDist = 24;
+        const dx = e.partner.x - e.x;
+        const d = Math.abs(dx);
+        if (d > targetDist) e.x += Math.sign(dx) * 0.3;
+        else if (d < 16)    e.x -= Math.sign(dx) * 0.2;
+      } else {
+        // Lost partner — go berserk: fast dive + rapid fire
+        e.vy = Math.min(e.vy + 0.02, 2.4);
+        if (e.t % 30 === 0 && e.y > 8) fireAtPlayer(e.x, e.y + 4, 2.2);
+      }
+      // Linked-beam tick fire (only while partnered)
+      if (e.partner && enemies.indexOf(e.partner) !== -1 && e.t % 110 === 0 && e.y > 8) {
+        // Each bomber drops a slow plasma bomb downward
+        eBullets.push({ x: e.x, y: e.y + 4, vx: 0, vy: 1.4 });
+      }
+    } else if (e.kind === 'eyeofsol') {
+      updateEyeOfSol(e);
     }
 
     // remove off-bottom
     if (e.y > GB_H + 16 || e.x < -20 || e.x > GB_W + 20) {
-      if (e.kind === 'boss' || e.kind === 'iceheart' || e.kind === 'crystalTurret') continue;
+      if (e.kind === 'boss' || e.kind === 'iceheart' || e.kind === 'eyeofsol' ||
+          e.kind === 'crystalTurret' || e.kind === 'sunspot') continue;
       enemies.splice(i, 1);
     }
   }
@@ -586,6 +721,10 @@ function drawEnemies(g) {
     if (e.kind === 'shardSplitter') drawShardSplitter(g, e);
     if (e.kind === 'shardlet')      drawShardlet(g, e);
     if (e.kind === 'iceheart')      drawIceheart(g, e);
+    if (e.kind === 'pyron')         drawPyron(g, e);
+    if (e.kind === 'sunspot')       drawSunspot(g, e);
+    if (e.kind === 'helixBomber')   drawHelixBomber(g, e);
+    if (e.kind === 'eyeofsol')      drawEyeOfSol(g, e);
   }
 }
 function drawDrone(g, e) {
@@ -868,7 +1007,9 @@ function drawHUD(g) {
 // ---------- SCENE COMPOSE ----------
 function drawScene() {
   buffer.background(PAL.sky);
-  if (stage === 2) drawAuroraBG(buffer); else drawStars(buffer);
+  if (stage === 2)      drawAuroraBG(buffer);
+  else if (stage === 3) drawCoronaBG(buffer);
+  else                  drawStars(buffer);
 
   if (state === 'play' || state === 'stagecard' || state === 'gameover' || state === 'win') {
     drawEnemies(buffer);
@@ -897,22 +1038,25 @@ function drawScene() {
 
 function drawTitleOverlay(g) {
   g.fill(PAL.cream); g.textFont('monospace');
-  g.textSize(14); g.text('SOLAR STRIKE', 28, 46);
+  g.textSize(14); g.text('SOLAR STRIKE', 28, 38);
   g.fill(PAL.orange);
-  g.textSize(6); g.text('STAGE SELECT', 50, 62);
+  g.textSize(6); g.text('STAGE SELECT', 50, 52);
   // Stage 1 option
   g.fill(PAL.yellow); g.textSize(7);
-  g.text('[1] SUNSET RUN',  38, 78);
+  g.text('[1] SUNSET RUN',  38, 68);
   // Stage 2 option (loaded out for demo)
   g.fill(PAL.cream); g.textSize(7);
-  g.text('[2] AURORA RUN',  38, 90);
-  g.fill(PAL.mag); g.textSize(6);
-  g.text('(full kit demo)', 50, 100);
+  g.text('[2] AURORA RUN',  38, 80);
+  // Stage 3 option — new!
+  g.fill(PAL.yellow); g.textSize(7);
+  g.text('[3] CORONA INFERNO', 26, 92);
+  g.fill(PAL.cream); g.textSize(6);
+  g.text('(full kit, brutal)', 46, 102);
   // Default action
   g.fill(PAL.yellow); g.textSize(7);
-  if (frameCount % 60 < 40) g.text('SPACE = STAGE 1', 32, 118);
+  if (frameCount % 60 < 40) g.text('SPACE = STAGE 1', 32, 120);
   g.fill(PAL.mag); g.textSize(6);
-  g.text('ARROWS/WASD - AUTOFIRE', 24, 132);
+  g.text('ARROWS/WASD - AUTOFIRE', 24, 134);
 }
 function drawGameOverOverlay(g) {
   // Black-out backdrop for that XCOPY "death TV" mood
@@ -1038,13 +1182,33 @@ function drawSkullFull(g, cx, cy, sliceY, sliceOff) {
   }
 }
 function drawWinOverlay(g) {
-  g.fill(PAL.yellow); g.textFont('monospace');
-  g.textSize(14); g.text('STAGE 1', 50, 50);
-  g.textSize(10); g.text('CLEAR!', 56, 66);
-  g.fill(PAL.cream); g.textSize(8);
-  g.text('SCORE ' + String(score).padStart(6, '0'), 44, 88);
+  // Stage 3 victory = final game complete with credits
+  // (Stage 1 and 2 use the stagecard transition, so reaching 'win' means S3 cleared.)
+  g.fill(PAL.cream); g.textFont('monospace');
+  g.textSize(12); g.text('GAME', 60, 36);
+  g.text('COMPLETE', 44, 52);
+  // Animated sun above the text
+  const cx = GB_W / 2, cy = 78;
+  const r = 8 + Math.sin(frameCount * 0.08) * 1.5;
+  g.fill(PAL.yellow);
+  g.ellipse(cx, cy, r * 2, r * 2);
+  g.fill(PAL.cream);
+  g.ellipse(cx, cy, r, r);
+  // Solar rays
   g.fill(PAL.orange);
-  if (frameCount % 60 < 40) g.text('SPACE TO REPLAY', 36, 110);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + frameCount * 0.01;
+    const rx = cx + Math.cos(a) * (r + 4);
+    const ry = cy + Math.sin(a) * (r + 4);
+    g.rect(Math.floor(rx), Math.floor(ry), 2, 2);
+  }
+  // Score + credits
+  g.fill(PAL.cream); g.textSize(7);
+  g.text('SCORE ' + String(score).padStart(6, '0'), 38, 102);
+  g.fill(PAL.yellow); g.textSize(6);
+  g.text('A HERMES & RAZZ JOINT', 26, 118);
+  g.fill(PAL.orange); g.textSize(6);
+  if (frameCount % 60 < 40) g.text('SPACE TO REPLAY', 38, 134);
 }
 
 // ---------- TOUCH INPUT ----------
@@ -1134,7 +1298,7 @@ function damageEnemy(e, j, dmg, fx, fy) {
   e.hp -= dmg;
   if (fx != null) spark(fx, fy, PAL.cream, 3);
   if (e.hp <= 0) {
-    if (e.kind === 'boss' || e.kind === 'iceheart') {
+    if (e.kind === 'boss' || e.kind === 'iceheart' || e.kind === 'eyeofsol') {
       e.dead = true;
     } else if (e.kind === 'shardSplitter') {
       // Split into 3 shardlets that fan outward
@@ -1162,7 +1326,7 @@ function damageEnemy(e, j, dmg, fx, fy) {
       enemies.splice(j, 1);
     }
   } else {
-    if (e.kind === 'boss' || e.kind === 'iceheart') {
+    if (e.kind === 'boss' || e.kind === 'iceheart' || e.kind === 'eyeofsol') {
       shake = Math.max(shake, 1.5);
       Audio.bossHit();
     } else {
@@ -1542,14 +1706,474 @@ function drawStageCardOverlay(g) {
   g.fill(PAL.mag);    g.rect(8, GB_H/2 - 28, GB_W - 16, 56);
   g.fill(PAL.orange); g.rect(8, GB_H/2 - 28, GB_W - 16, 2);
   g.fill(PAL.orange); g.rect(8, GB_H/2 + 26, GB_W - 16, 2);
-  // Text
+  // Text — name depends on current stage
+  const stageName = stage === 2 ? 'AURORA RUN'
+                  : stage === 3 ? 'CORONA INFERNO'
+                  : 'SUNSET RUN';
+  const nameX = stage === 3 ? 27 : 47;
   g.fill(PAL.cream); g.textFont('monospace');
-  g.textSize(14); g.text('STAGE 2', 52, GB_H/2 - 8);
+  g.textSize(14); g.text('STAGE ' + stage, 48, GB_H/2 - 8);
   g.fill(PAL.yellow); g.textSize(8);
-  g.text('AURORA RUN', 47, GB_H/2 + 8);
+  g.text(stageName, nameX, GB_H/2 + 8);
   // Blinking "go" hint
   if (stageCardTimer > 60 && frameCount % 30 < 18) {
     g.fill(PAL.cream); g.textSize(6);
     g.text('TAP / SPACE TO ADVANCE', 22, GB_H/2 + 22);
   }
 }
+
+// ============================================================
+// STAGE 3 — CORONA INFERNO: enemies, boss, projectiles, background
+// ============================================================
+
+// ----- CORONA BACKGROUND -----
+function initCoronaBG() {
+  heatBands.length = 0;
+  // 3 thinner heat bands at varying depths — distortion shimmer.
+  // Lower count + thinner profile so enemies/bullets read clearly.
+  for (let i = 0; i < 3; i++) {
+    heatBands.push({
+      y: 24 + i * 44 + random(-4, 4),
+      phase: random(TWO_PI),
+      speed: random(0.025, 0.05),
+      amp: random(2, 5),
+    });
+  }
+  embers.length = 0;
+  for (let i = 0; i < 14; i++) {
+    embers.push({
+      x: random(GB_W),
+      y: random(GB_H),
+      vy: -random(0.4, 1.1),
+      size: 1,
+      hue: random() < 0.5 ? PAL.yellow : PAL.orange,
+    });
+  }
+  sunArcs.length = 0;
+  // reset flare state
+  flare.active = false;
+  flare.warning = 0;
+  flare.sweepT = 0;
+  flare.cooldown = 360; // first flare ~6s in
+}
+
+function updateCoronaBG() {
+  for (const b of heatBands) b.phase += b.speed;
+  for (const e of embers) {
+    e.y += e.vy;
+    e.x += Math.sin((e.y + frameCount * 0.5) * 0.06) * 0.18;
+    if (e.y < -2) {
+      e.y = GB_H + 2;
+      e.x = random(GB_W);
+    }
+  }
+  // Occasional plasma arc — flickering streak between two random points
+  if (frameCount % 90 === 0 && random() < 0.6) {
+    sunArcs.push({
+      x1: random(GB_W * 0.2, GB_W * 0.8),
+      y1: random(20, GB_H - 20),
+      x2: random(GB_W * 0.2, GB_W * 0.8),
+      y2: random(20, GB_H - 20),
+      life: 8,
+    });
+  }
+  for (let i = sunArcs.length - 1; i >= 0; i--) {
+    sunArcs[i].life--;
+    if (sunArcs[i].life <= 0) sunArcs.splice(i, 1);
+  }
+  // ---- Solar flare beam (gameplay-affecting BG element) ----
+  if (state === 'play' && stage === 3 && !(boss && boss.kind === 'eyeofsol')) {
+    // Don't spawn flares during boss fight — boss has its own attacks
+    if (flare.active) {
+      flare.sweepT++;
+      // Beam damages player if in band
+      if (invuln <= 0 &&
+          Math.abs(player.y - flare.y) < flare.height / 2 + 2) {
+        playerHit();
+      }
+      if (flare.sweepT >= flare.sweepDur) {
+        flare.active = false;
+        flare.cooldown = 360 + Math.floor(random(120));
+      }
+    } else if (flare.warning > 0) {
+      flare.warning--;
+      if (flare.warning === 0) {
+        flare.active = true;
+        flare.sweepT = 0;
+        shake = Math.max(shake, 6);
+        Audio.bossHit && Audio.bossHit();
+      }
+    } else {
+      flare.cooldown--;
+      if (flare.cooldown <= 0) {
+        flare.warning = 90; // 1.5s warning
+        // Pick y away from current player position so it's a real dodge
+        let candY;
+        let tries = 0;
+        do {
+          candY = random(24, GB_H - 24);
+          tries++;
+        } while (Math.abs(candY - player.y) < 24 && tries < 5);
+        flare.y = candY;
+        flare.height = 14 + Math.floor(random(6));
+      }
+    }
+  }
+}
+
+function drawCoronaBG(g) {
+  // 1. Heat-band distortion: each band is a single-pixel shimmer line
+  // with sparse dither — keeps the playfield readable while still evoking heat haze.
+  for (const b of heatBands) {
+    for (let x = 0; x < GB_W; x++) {
+      const yWave = b.y + Math.sin(x * 0.18 + b.phase) * b.amp;
+      // alternate orange/mag dither — sparse, low-contrast against deep crimson sky
+      if ((x + Math.floor(b.phase * 6)) % 3 === 0) {
+        g.fill(PAL.orange);
+        g.rect(x, Math.floor(yWave), 1, 1);
+      } else if ((x + Math.floor(b.phase * 6)) % 3 === 1) {
+        g.fill(PAL.mag);
+        g.rect(x, Math.floor(yWave + 1), 1, 1);
+      }
+    }
+  }
+  // 2. Embers — small pixels drifting upward
+  for (const e of embers) {
+    g.fill(e.hue);
+    g.rect(Math.floor(e.x), Math.floor(e.y), e.size, e.size);
+  }
+  // 3. Sun arcs — bright crackling lines drawn as a chain of pixels
+  for (const a of sunArcs) {
+    const steps = 14;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = a.x1 + (a.x2 - a.x1) * t + random(-2, 2);
+      const y = a.y1 + (a.y2 - a.y1) * t + random(-2, 2);
+      g.fill(i % 2 ? PAL.cream : PAL.yellow);
+      g.rect(Math.floor(x), Math.floor(y), 1, 1);
+    }
+  }
+  // 4. Solar flare beam + warning
+  if (flare.warning > 0) {
+    // Pulsing warning band (blinking outline)
+    if (frameCount % 8 < 4) {
+      g.fill(PAL.cream);
+      g.rect(0, Math.floor(flare.y - flare.height / 2) - 1, GB_W, 1);
+      g.rect(0, Math.floor(flare.y + flare.height / 2),     GB_W, 1);
+    }
+    // Warning text "!!!"
+    if (frameCount % 12 < 6) {
+      g.fill(PAL.cream); g.textFont('monospace'); g.textSize(7);
+      g.text('!FLARE!', 56, flare.y + 2);
+    }
+  }
+  if (flare.active) {
+    // Bright beam — fully-saturated horizontal band with bright core
+    const top = Math.floor(flare.y - flare.height / 2);
+    g.fill(PAL.orange);
+    g.rect(0, top, GB_W, flare.height);
+    g.fill(PAL.yellow);
+    g.rect(0, top + 2, GB_W, flare.height - 4);
+    g.fill(PAL.cream);
+    g.rect(0, Math.floor(flare.y) - 1, GB_W, 2);
+    // Crackle particles along the beam
+    if (frameCount % 2 === 0) {
+      for (let i = 0; i < 3; i++) {
+        particles.push({
+          x: random(GB_W), y: flare.y + random(-flare.height / 2, flare.height / 2),
+          vx: random(-0.5, 0.5), vy: random(-0.5, 0.5),
+          life: 10, color: PAL.cream,
+        });
+      }
+    }
+  }
+}
+
+// ----- ENEMIES (Stage 3) -----
+function makePyron(x, y) {
+  return { kind: 'pyron', x, y, w: 8, h: 8, hp: 2, vy: 0.85,
+           t: random(TWO_PI), amp: 20, baseX: x, value: 150 };
+}
+function makeSunspot(x, y) {
+  return { kind: 'sunspot', x, y, w: 4, h: 4, hp: 2, t: 0, value: 250 };
+}
+function makeHelixBomber(x, y) {
+  return { kind: 'helixBomber', x, y, w: 8, h: 8, hp: 3, vy: 0.7,
+           t: 0, partner: null, value: 220 };
+}
+
+function drawPyron(g, e) {
+  const x = Math.floor(e.x - 4), y = Math.floor(e.y - 4);
+  // Tear-drop plasma fish, bright trail
+  g.fill(PAL.orange); g.rect(x + 1, y + 2, 6, 5);
+  g.fill(PAL.yellow); g.rect(x + 2, y + 1, 4, 6);
+  g.fill(PAL.cream);  g.rect(x + 3, y + 3, 2, 2);
+  // tail flicker
+  if (frameCount % 6 < 3) {
+    g.fill(PAL.orange);
+    g.rect(x + 3, y + 7, 2, 1);
+  }
+}
+function drawSunspot(g, e) {
+  // Dark core, hot rim — visible "warning" cue before burst
+  const r = e.w;
+  const cx = Math.floor(e.x), cy = Math.floor(e.y);
+  // Rim color brightens as it nears burst
+  const rim = (e.t < 60) ? PAL.mag
+             : (e.t < 100) ? PAL.orange
+             : (frameCount % 4 < 2 ? PAL.cream : PAL.yellow);
+  g.fill(rim);
+  g.rect(cx - r/2,     cy - r/2,     r, r);
+  g.fill(PAL.sky); // dark cool spot in middle
+  const ir = Math.max(1, r - 2);
+  g.rect(cx - ir/2,    cy - ir/2,    ir, ir);
+  // Pre-burst sparkles
+  if (e.t > 90 && frameCount % 3 === 0) {
+    g.fill(PAL.cream);
+    g.rect(cx + random(-r, r), cy + random(-r, r), 1, 1);
+  }
+}
+function drawHelixBomber(g, e) {
+  const x = Math.floor(e.x - 4), y = Math.floor(e.y - 4);
+  // Boxy bomber w/ glowing underside
+  g.fill(PAL.mag);    g.rect(x,     y + 2, 8, 4);
+  g.fill(PAL.orange); g.rect(x + 1, y + 1, 6, 6);
+  g.fill(PAL.cream);  g.rect(x + 2, y + 2, 4, 2);
+  // pulsing belly
+  g.fill(frameCount % 8 < 4 ? PAL.yellow : PAL.cream);
+  g.rect(x + 3, y + 5, 2, 2);
+  // Beam between partners (visual + damage)
+  if (e.partner && enemies.indexOf(e.partner) !== -1 && e.x < e.partner.x) {
+    // only the left bomber draws the beam to avoid double-draw
+    const p = e.partner;
+    const steps = 16;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const bx = e.x + (p.x - e.x) * t;
+      const by = e.y + (p.y - e.y) * t + Math.sin(frameCount * 0.18 + t * Math.PI * 2) * 1.2;
+      g.fill(i % 2 ? PAL.yellow : PAL.cream);
+      g.rect(Math.floor(bx), Math.floor(by), 1, 1);
+    }
+  }
+}
+// Damage the beam between live helix bombers if the player flies into it
+function helixBeamPlayerCheck() {
+  if (invuln > 0) return;
+  // collect alive pairs (process each pair once)
+  for (let i = 0; i < enemies.length; i++) {
+    const a = enemies[i];
+    if (a.kind !== 'helixBomber') continue;
+    const b = a.partner;
+    if (!b || enemies.indexOf(b) === -1) continue;
+    if (a.x > b.x) continue; // only one direction
+    // distance from player point to segment a-b
+    const px = player.x, py = player.y;
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const wx = px - a.x,  wy = py - a.y;
+    const c1 = vx * wx + vy * wy;
+    if (c1 <= 0) continue;
+    const c2 = vx * vx + vy * vy;
+    if (c1 >= c2) continue;
+    const t = c1 / c2;
+    const cx = a.x + t * vx, cy = a.y + t * vy;
+    const d = Math.hypot(px - cx, py - cy);
+    if (d < 3) {
+      playerHit();
+      return;
+    }
+  }
+}
+
+// ----- EYE OF SOL BOSS -----
+// 3 phases:
+//  P1 — closed iris: sweeping eyelid lasers (horizontal cones)
+//  P2 — open iris (core exposed), spawns sunspot adds, fires aimed bursts
+//  P3 — fractured: lasers + ring bursts, fast aimed shots
+function spawnEyeOfSol() {
+  Audio.bossAppear();
+  boss = {
+    kind: 'eyeofsol',
+    x: GB_W / 2, y: -40,
+    w: 56, h: 32,
+    hp: 110, hpMax: 110,
+    t: 0, phase: 1,
+    fireT: 0, dead: false,
+    blink: 0,            // eyelid open-state 0..1
+    addCooldown: 0,
+    laserState: 0,       // 0 idle, 1 warning, 2 firing
+    laserT: 0,
+    laserAngle: 0,
+  };
+  enemies.push(boss);
+}
+function updateEyeOfSol(b) {
+  b.t++;
+  // Entry glide
+  if (b.y < 28) { b.y += 0.5; return; }
+
+  // Phase transitions by HP
+  if (b.hp < b.hpMax * 0.65 && b.phase === 1) {
+    b.phase = 2;
+    shake = 8;
+    Audio.bossAppear();
+  } else if (b.hp < b.hpMax * 0.30 && b.phase === 2) {
+    b.phase = 3;
+    shake = 10;
+    Audio.bossAppear();
+  }
+
+  // Eyelid blink (visual): open more in P2, fully open + fractured in P3
+  const targetBlink = b.phase === 1 ? 0.2 : (b.phase === 2 ? 0.85 : 1.0);
+  b.blink += (targetBlink - b.blink) * 0.04;
+
+  // Movement: drift side to side, faster as phases progress
+  const sway = b.phase === 1 ? 36 : (b.phase === 2 ? 42 : 50);
+  const speed = b.phase === 1 ? 0.015 : (b.phase === 2 ? 0.025 : 0.04);
+  b.x = GB_W / 2 + Math.sin(b.t * speed) * sway;
+  b.y = 32 + Math.sin(b.t * speed * 0.6) * 4;
+
+  // Firing patterns
+  b.fireT++;
+  if (b.phase === 1) {
+    // Sweeping eyelid laser every ~3s
+    if (b.laserState === 0 && b.fireT % 180 === 0) {
+      b.laserState = 1;
+      b.laserT = 0;
+      // aim toward player at time of warning
+      b.laserAngle = Math.atan2(player.y - b.y, player.x - b.x);
+    }
+    if (b.laserState === 1) {
+      b.laserT++;
+      if (b.laserT >= 60) {
+        b.laserState = 2;
+        b.laserT = 0;
+        shake = Math.max(shake, 4);
+        // fire a fast aimed bullet salvo in a cone
+        for (let i = -2; i <= 2; i++) {
+          const a = b.laserAngle + i * 0.12;
+          eBullets.push({
+            x: b.x, y: b.y + 4,
+            vx: Math.cos(a) * 2.4,
+            vy: Math.sin(a) * 2.4,
+          });
+        }
+      }
+    }
+    if (b.laserState === 2) {
+      b.laserT++;
+      if (b.laserT >= 20) b.laserState = 0;
+    }
+    // Mild ambient fire
+    if (b.fireT % 70 === 0) {
+      fireAtPlayer(b.x, b.y + 8, 1.5);
+    }
+  } else if (b.phase === 2) {
+    // Spawn sunspot adds + aimed double-shot
+    if (b.addCooldown <= 0) {
+      b.addCooldown = 220;
+      const sx = b.x + random(-20, 20);
+      const sy = b.y + 24 + random(0, 16);
+      enemies.push(makeSunspot(sx, sy));
+    } else b.addCooldown--;
+    if (b.fireT % 50 === 0) {
+      // Spread of 3
+      for (let i = -1; i <= 1; i++) {
+        const a = Math.atan2(player.y - b.y, player.x - b.x) + i * 0.22;
+        eBullets.push({ x: b.x, y: b.y + 6, vx: Math.cos(a) * 1.9, vy: Math.sin(a) * 1.9 });
+      }
+    }
+  } else {
+    // Phase 3 chaos — fast aimed + ring bursts
+    if (b.fireT % 28 === 0) {
+      fireAtPlayer(b.x, b.y + 6, 2.3);
+    }
+    if (b.fireT % 90 === 0) {
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 + b.t * 0.01;
+        eBullets.push({ x: b.x, y: b.y, vx: Math.cos(a) * 1.6, vy: Math.sin(a) * 1.6 });
+      }
+    }
+    // Occasional add
+    if (b.fireT % 200 === 0) {
+      enemies.push(makeSunspot(b.x + random(-30, 30), b.y + 26 + random(0, 12)));
+    }
+  }
+}
+function drawEyeOfSol(g, b) {
+  const cx = b.x, cy = b.y;
+  // Outer eye-socket (dark crimson ring)
+  g.fill(PAL.mag);
+  g.ellipse(cx, cy, 56, 36);
+  // Eyeball (cream)
+  g.fill(PAL.cream);
+  g.ellipse(cx, cy, 48, 28);
+  // Iris size grows with phase / blink
+  const irisR = 8 + b.blink * 6;
+  g.fill(PAL.orange);
+  g.ellipse(cx, cy, irisR * 2, irisR * 2);
+  // Pupil — pulses
+  const pup = (frameCount % 10 < 5) ? PAL.yellow : PAL.cream;
+  g.fill(pup);
+  g.ellipse(cx, cy, irisR, irisR);
+  // Dark pupil center
+  g.fill(PAL.sky);
+  g.ellipse(cx, cy, irisR * 0.5, irisR * 0.5);
+
+  // Eyelids — closed amount = 1 - blink
+  const lidH = (1 - b.blink) * 14;
+  if (lidH > 0.5) {
+    g.fill(PAL.mag);
+    g.rect(Math.floor(cx - 24), Math.floor(cy - 14), 48, lidH);
+    g.rect(Math.floor(cx - 24), Math.floor(cy + 14 - lidH), 48, lidH);
+    // lash line
+    g.fill(PAL.orange);
+    g.rect(Math.floor(cx - 24), Math.floor(cy - 14 + lidH), 48, 1);
+    g.rect(Math.floor(cx - 24), Math.floor(cy + 14 - lidH - 1), 48, 1);
+  }
+
+  // Phase 3: fractures (crack lines)
+  if (b.phase === 3) {
+    g.fill(PAL.sky);
+    g.rect(Math.floor(cx - 18), Math.floor(cy - 1), 12, 1);
+    g.rect(Math.floor(cx + 4),  Math.floor(cy - 6), 10, 1);
+    g.rect(Math.floor(cx - 8),  Math.floor(cy + 6), 14, 1);
+    // chips fly occasionally
+    if (frameCount % 6 === 0) {
+      particles.push({
+        x: cx + random(-20, 20), y: cy + random(-8, 8),
+        vx: random(-1, 1), vy: random(-1.5, -0.5),
+        life: 30, color: PAL.cream,
+      });
+    }
+  }
+
+  // Phase 1 laser warning / firing visual
+  if (b.laserState === 1) {
+    // Telegraph line from eye toward laser angle (blinking)
+    if (frameCount % 6 < 3) {
+      const len = 80;
+      const steps = 30;
+      for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        const lx = cx + Math.cos(b.laserAngle) * (irisR + 2 + t * len);
+        const ly = cy + Math.sin(b.laserAngle) * (irisR + 2 + t * len);
+        g.fill(PAL.cream);
+        g.rect(Math.floor(lx), Math.floor(ly), 1, 1);
+      }
+    }
+  }
+  if (b.laserState === 2) {
+    // Brief bright glow
+    g.fill(PAL.cream);
+    g.ellipse(cx, cy, irisR * 2.2, irisR * 2.2);
+  }
+}
+
+// ----- Integrate helix-beam damage check into update loop -----
+// We hook into updatePlay via a small wrapper: append a frame-end check.
+// (Defined here so it can call into stage-3 specific code.)
+const _origCollisions = collisions;
+collisions = function () {
+  _origCollisions();
+  if (stage === 3) helixBeamPlayerCheck();
+};
