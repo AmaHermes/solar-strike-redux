@@ -2,6 +2,10 @@
 
 A modern, colorized homage to **Solar Striker** (Game Boy, 1990) — a vertical-scrolling shoot-'em-up. Built with p5.js so it runs in any browser.
 
+### ▶️ [**Play it in your browser →**](https://amahermes.github.io/solar-strike-redux/)
+
+[![Play Now](https://img.shields.io/badge/Play_Now-🎮_Click_Here-ff7a3d?style=for-the-badge)](https://amahermes.github.io/solar-strike-redux/)
+
 ## Project Owner
 - **Razz** (creative direction)
 - **Hermes** (implementation)
