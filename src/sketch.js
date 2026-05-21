@@ -2784,7 +2784,7 @@ const Leaderboard = {
   KEY: 'ssr.leaderboard.v1',
   // Universal API endpoint. Empty string = local-only mode. Set this after
   // deploying the Cloudflare Worker (see leaderboard-api/README.md).
-  API: 'https://solar-strike-leaderboard.amahermes.workers.dev',
+  API: 'https://solar-strike-leaderboard.octokitty.workers.dev',
   _remote: null,          // last fetched remote board (array)
   _lastFetch: 0,          // ms timestamp of last successful fetch
   _inflight: null,        // pending fetch promise

@@ -6,4 +6,4 @@ compatibility_date = "2026-05-01"
 # Paste the returned id here.
 [[kv_namespaces]]
 binding = "SCORES"
-id = "REPLACE_WITH_KV_ID"
+id = "1e4d0b01f7424b6b951edda6ca144d90"
