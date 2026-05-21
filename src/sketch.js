@@ -1179,28 +1179,33 @@ function drawTitleOverlay(g) {
   const cx = (txt) => Math.floor((GB_W - g.textWidth(txt)) / 2);
 
   if (titleIdleT > scrollStart) {
-    // Credits scroll: lines move from bottom toward top
+    // Credits scroll: lines move from bottom toward top, clipped below header
     const dt = titleIdleT - scrollStart;
     const speed = 0.4;              // pixels per frame
     const baseY = GB_H - dt * speed;
 
     let y = baseY;
     const lineH = 11;
+    const clipTop = 62;             // anchor: header sits y=38 + sub y=52, credits start below
+
+    // Helper: only render lines that have risen above clipTop won't show (clipped),
+    // and below GB_H+8 (off-bottom)
+    const drawLine = (txt, color, size) => {
+      if (y >= clipTop && y < GB_H + 8) {
+        g.fill(color); g.textSize(size);
+        g.text(txt, cx(txt), y);
+      }
+      y += lineH;
+    };
 
     // "PILOT LEADERBOARD" header (centred)
-    g.fill(PAL.orange); g.textSize(7);
-    const hdr = 'PILOT LEADERBOARD';
-    g.text(hdr, cx(hdr), y); y += lineH + 2;
+    drawLine('PILOT LEADERBOARD', PAL.orange, 7);
+    y += 2;
 
     if (board.length === 0) {
-      g.fill(PAL.cream); g.textSize(6);
-      const l1 = 'NO SCORES YET';
-      const l2 = 'BE THE FIRST';
-      g.text(l1, cx(l1), y); y += lineH;
-      g.text(l2, cx(l2), y); y += lineH;
+      drawLine('NO SCORES YET', PAL.cream, 6);
+      drawLine('BE THE FIRST',  PAL.cream, 6);
     } else {
-      g.textSize(6);
-      // Fixed-width row format so alignment stays clean
       for (let i = 0; i < board.length; i++) {
         const row = board[i];
         const isYou = row.name === playerName;
@@ -1208,23 +1213,16 @@ function drawTitleOverlay(g) {
         const nm   = row.name.padEnd(12, ' ');
         const sc   = String(row.score).padStart(7, ' ');
         const line = rank + ' ' + nm + ' ' + sc;
-        g.fill(isYou ? PAL.yellow : PAL.cream);
-        g.text(line, cx(line), y);
-        y += lineH;
+        drawLine(line, isYou ? PAL.yellow : PAL.cream, 6);
       }
     }
 
     // Tagline + cheeky BTC promise (all centred)
     y += lineH;
-    g.fill(PAL.mag); g.textSize(6);
-    const t1 = 'FLY THE SUN. FIGHT THE VOID.';
-    g.text(t1, cx(t1), y); y += lineH;
-    g.fill(PAL.orange);
-    const t2 = '* WIN $100 BTC ON COMPLETION *';
-    g.text(t2, cx(t2), y); y += lineH - 2;
-    g.fill(PAL.mag); g.textSize(5);
-    const t3 = '* (worth 0.0000001 sats, terms apply)';
-    g.text(t3, cx(t3), y);
+    drawLine('FLY THE SUN. FIGHT THE VOID.', PAL.mag, 6);
+    drawLine('* WIN $100 BTC ON COMPLETION *', PAL.orange, 6);
+    y -= 2;
+    drawLine('* (worth 0.0000001 sats, terms apply)', PAL.mag, 5);
 
     // Reset when credits fully scroll off
     if (baseY < -200) titleIdleT = 0;
