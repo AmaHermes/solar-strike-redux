@@ -1056,8 +1056,8 @@ function triggerBomb() {
   // Pop every non-boss enemy on screen, 2× score, gold popups
   for (let j = enemies.length - 1; j >= 0; j--) {
     const e = enemies[j];
-    if (e.kind === 'boss') {
-      // Boss takes chip damage instead of dying
+    if (e.kind === 'boss' || e.kind === 'iceheart' || e.kind === 'eyeofsol' || e.kind === 'singularity') {
+      // Bosses take chip damage instead of being wiped
       e.hp = Math.max(0, e.hp - BOMB_BOSS_CHIP);
       spark(e.x, e.y, PAL.yellow, 6);
       continue;
