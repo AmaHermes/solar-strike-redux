@@ -125,59 +125,31 @@ function draw() {
 function keyPressed() {
   Audio.resume(); // unlock audio context on first input
   if (key === 'm' || key === 'M') { Audio.toggleMusic(); return; }
-  if (key === 'n' || key === 'N') { Audio.toggleSFX();   return; }
+  if (key === 'n' || key === 'N') {
+    // On title, [N] opens name entry; in-game, N still toggles SFX (legacy).
+    if (state === 'title') { openNameEntry(); return; }
+    Audio.toggleSFX(); return;
+  }
+  // If we're in name-entry mode, ignore game keys — the HTML input handles them
+  if (nameEntryActive) return;
   // Stage card: any keypress skips it
   if (state === 'stagecard' && stageCardTimer > 20) {
     state = 'play';
     Audio.startMusic();
     return;
   }
-  // Stage select from title / gameover / win: press 1 or 2 to start that stage
-  // with full kit. Useful for demos. Stage 1 still defaults to SPACE.
+  // Title / gameover / win → SPACE or Enter starts a fresh run at Stage 1
   if (state === 'title' || state === 'gameover' || state === 'win') {
-    if (key === '1') {
-      resetGame();
-      state = 'play';
-      Audio.startMusic();
-      return;
-    }
-    if (key === '2') {
-      resetGame();
-      setStage(2);
-      // Loadout: max spread + both new weapons so the demo is loud
-      player.power = 3;
-      player.homing = 2;
-      player.plasma = 1;
-      state = 'play';
-      Audio.startMusic();
-      return;
-    }
-    if (key === '3') {
-      resetGame();
-      setStage(3);
-      // Full kit — corona is brutal, you'll need everything
-      player.power = 3;
-      player.homing = 2;
-      player.plasma = 1;
-      state = 'play';
-      Audio.startMusic();
-      return;
-    }
-    if (key === '4') {
-      resetGame();
-      setStage(4);
-      // Full kit — this is the finale, you came to surf the event horizon
-      player.power = 3;
-      player.homing = 2;
-      player.plasma = 1;
-      state = 'play';
-      Audio.startMusic();
-      return;
-    }
     if (key === ' ' || key === 'Enter' || keyCode === 13) {
+      // First-ever launch → force name entry before play
+      if (!Pilot.hasName()) {
+        openNameEntry();
+        return;
+      }
       resetGame();
       state = 'play';
       Audio.startMusic();
+      return;
     }
   }
 }
@@ -314,6 +286,8 @@ function updatePlay() {
       state = 'win';
       Audio.stopMusic();
       Audio.stageClear();
+      Leaderboard.submit(Pilot.name(), score, true);
+      titleIdleT = 0;
     }
   }
 }
@@ -1111,6 +1085,8 @@ function playerHit() {
     state = 'gameover';
     Audio.stopMusic();
     Audio.gameOver();
+    Leaderboard.submit(Pilot.name(), score, false);
+    titleIdleT = 0;
   } else {
     player.x = GB_W / 2; player.y = GB_H - 24;
   }
@@ -1184,29 +1160,75 @@ function drawScene() {
 }
 
 function drawTitleOverlay(g) {
+  // Title block — stays anchored top
   g.fill(PAL.cream); g.textFont('monospace');
   g.textSize(14); g.text('SOLAR STRIKE', 28, 38);
   g.fill(PAL.orange);
-  g.textSize(6); g.text('STAGE SELECT', 50, 52);
-  // Stage 1 option
-  g.fill(PAL.yellow); g.textSize(7);
-  g.text('[1] SUNSET RUN',  38, 68);
-  // Stage 2 option (loaded out for demo)
-  g.fill(PAL.cream); g.textSize(7);
-  g.text('[2] AURORA RUN',  38, 80);
-  // Stage 3 option — new!
-  g.fill(PAL.yellow); g.textSize(7);
-  g.text('[3] CORONA INFERNO', 26, 92);
-  // Stage 4 option — FINALE
-  g.fill(PAL.cream); g.textSize(7);
-  g.text('[4] EVENT HORIZON', 28, 104);
-  g.fill(PAL.mag); g.textSize(6);
-  g.text('(the finale)', 56, 114);
-  // Default action
-  g.fill(PAL.yellow); g.textSize(7);
-  if (frameCount % 60 < 40) g.text('SPACE = STAGE 1', 32, 128);
-  g.fill(PAL.mag); g.textSize(6);
-  g.text('ARROWS/WASD - AUTOFIRE', 24, 142);
+  g.textSize(6); g.text('A SOLAR-SUNSET SHMUP', 32, 52);
+
+  // After idle, scroll the leaderboard up like film credits
+  titleIdleT++;
+  const scrollStart = 180;          // 3s before credits start rolling
+  const playerName = Pilot.name() || 'PILOT';
+  const board = Leaderboard.top(5);
+
+  if (titleIdleT > scrollStart) {
+    // Credits scroll: lines move from bottom toward top
+    const dt = titleIdleT - scrollStart;
+    const speed = 0.4;              // pixels per frame
+    const baseY = GB_H - dt * speed;
+
+    let y = baseY;
+    const lineH = 11;
+
+    // "PILOT LEADERBOARD" header
+    g.fill(PAL.orange); g.textSize(7);
+    g.text('PILOT LEADERBOARD', 24, y); y += lineH + 2;
+
+    if (board.length === 0) {
+      g.fill(PAL.cream); g.textSize(6);
+      g.text('NO SCORES YET', 42, y); y += lineH;
+      g.text('BE THE FIRST', 46, y);  y += lineH;
+    } else {
+      g.textSize(6);
+      for (let i = 0; i < board.length; i++) {
+        const row = board[i];
+        const isYou = row.name === playerName;
+        const rank = (i + 1) + '.';
+        const nm   = row.name.padEnd(12, ' ');
+        const sc   = String(row.score).padStart(7, ' ');
+        g.fill(isYou ? PAL.yellow : PAL.cream);
+        g.text(rank + ' ' + nm + ' ' + sc, 12, y);
+        y += lineH;
+      }
+    }
+
+    // Tagline + cheeky BTC promise
+    y += lineH;
+    g.fill(PAL.mag); g.textSize(6);
+    g.text('FLY THE SUN. FIGHT THE VOID.', 14, y); y += lineH;
+    g.fill(PAL.orange);
+    g.text('* WIN $100 BTC ON COMPLETION *', 8, y); y += lineH - 2;
+    g.fill(PAL.mag); g.textSize(5);
+    g.text('* (worth 0.0000001 sats, terms apply)', 4, y);
+
+    // Reset when credits fully scroll off
+    if (baseY < -200) titleIdleT = 0;
+  } else {
+    // Pre-credits: show pilot name + start prompt
+    g.fill(PAL.cream); g.textSize(7);
+    g.text('PILOT: ' + playerName, 30, 76);
+    // [N] tap-zone hint (visible always)
+    g.fill(PAL.mag); g.textSize(6);
+    g.text('[N] = CHANGE NAME', 38, 88);
+
+    // Blinking start prompt
+    g.fill(PAL.yellow); g.textSize(8);
+    if (frameCount % 60 < 40) g.text('TAP / SPACE TO START', 18, 116);
+
+    g.fill(PAL.mag); g.textSize(5);
+    g.text('ARROWS / WASD - AUTOFIRE - M / N AUDIO', 8, 138);
+  }
 }
 function drawGameOverOverlay(g) {
   // Black-out backdrop for that XCOPY "death TV" mood
@@ -1228,9 +1250,13 @@ function drawGameOverOverlay(g) {
   g.fill(PAL.orange); g.textFont('monospace');
   g.textSize(14); g.text('GAME OVER', 38, 105);
   g.fill(PAL.cream);  g.textSize(8);
-  g.text('SCORE ' + String(score).padStart(6, '0'), 44, 122);
-  g.fill(PAL.yellow);
-  if (frameCount % 60 < 40) g.text('SPACE TO RETRY', 38, 138);
+  g.text('SCORE ' + String(score).padStart(6, '0'), 44, 119);
+  // Pilot name on the death TV
+  g.fill(PAL.mag); g.textSize(6);
+  const nm = (Pilot.name() || 'UNKNOWN');
+  g.text('PILOT ' + nm, Math.floor((GB_W - (nm.length + 6) * 4) / 2), 130);
+  g.fill(PAL.yellow); g.textSize(8);
+  if (frameCount % 60 < 40) g.text('SPACE TO RETRY', 38, 144);
 }
 
 // ---------- XCOPY-INSPIRED GLITCH SKULL ----------
@@ -1387,6 +1413,8 @@ function recomputeTouchSens() {
 
 function touchStarted(event) {
   Audio.resume();
+  // If we're in name-entry mode, let taps fall through to the input
+  if (nameEntryActive) return true;
   // Stage card: tap advances
   if (state === 'stagecard' && stageCardTimer > 20) {
     state = 'play';
@@ -1394,12 +1422,27 @@ function touchStarted(event) {
     Touch.active = false;
     return false;
   }
-  // First tap on title/gameover/win = start, like SPACE does on keyboard
+  // On title/gameover/win: tap upper-half of screen near "[N]" zone = name entry,
+  // anything else starts a fresh run.
   if (state === 'title' || state === 'gameover' || state === 'win') {
+    // Estimate tap location in game-space.
+    const cw = (canvas && canvas.width)  || width;
+    const ch = (canvas && canvas.height) || height;
+    const tx = touches && touches.length > 0 ? (touches[0].x / cw) * GB_W : GB_W / 2;
+    const ty = touches && touches.length > 0 ? (touches[0].y / ch) * GB_H : GB_H / 2;
+    // [N] CHANGE NAME tap-zone on title only (matches text at y≈88)
+    if (state === 'title' && ty > 80 && ty < 100 && tx > 20 && tx < 130) {
+      openNameEntry();
+      return false;
+    }
+    // First-launch flow: force name entry before play
+    if (!Pilot.hasName()) {
+      openNameEntry();
+      return false;
+    }
     resetGame();
     state = 'play';
     Audio.startMusic();
-    // Don't drag the player on the same tap that started the game
     Touch.active = false;
     return false;
   }
@@ -1411,7 +1454,6 @@ function touchStarted(event) {
     Touch.dx = 0;
     Touch.dy = 0;
   }
-  // returning false prevents the browser default (scroll, zoom, etc.)
   return false;
 }
 
@@ -2602,3 +2644,101 @@ function drawSingularity(g, e) {
     g.rect(Math.floor(e.x), Math.floor(e.y - 4), 1, 8);
   }
 }
+
+// ============================================================
+// PILOT PROFILE + LEADERBOARD
+// ============================================================
+// Stored in browser localStorage. Single-pilot per device.
+// Names are uppercase, max 12 chars, alphanumeric + space.
+
+let titleIdleT = 0;
+let nameEntryActive = false;
+
+const Pilot = {
+  KEY: 'ssr.pilot.name',
+  name() {
+    try { return localStorage.getItem(this.KEY) || ''; }
+    catch (e) { return ''; }
+  },
+  hasName() { return this.name().length > 0; },
+  set(name) {
+    const clean = String(name || '').toUpperCase()
+      .replace(/[^A-Z0-9 ]/g, '').slice(0, 12).trim();
+    if (clean.length === 0) return false;
+    try { localStorage.setItem(this.KEY, clean); } catch (e) {}
+    return true;
+  },
+};
+
+const Leaderboard = {
+  KEY: 'ssr.leaderboard.v1',
+  load() {
+    try {
+      const raw = localStorage.getItem(this.KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  },
+  save(arr) {
+    try { localStorage.setItem(this.KEY, JSON.stringify(arr.slice(0, 20))); }
+    catch (e) {}
+  },
+  top(n) { return this.load().slice(0, n); },
+  submit(name, score, completed) {
+    if (!name || score <= 0) return;
+    const arr = this.load();
+    arr.push({ name, score, completed: !!completed, at: Date.now() });
+    arr.sort((a, b) => b.score - a.score);
+    this.save(arr);
+  },
+};
+
+// ---------- Name-entry overlay ----------
+// Uses the hidden HTML <input> in index.html (#name-input). Showing it triggers
+// the on-screen keyboard on iOS/Android automatically.
+function openNameEntry() {
+  const input = document.getElementById('name-input');
+  if (!input) return;
+  nameEntryActive = true;
+  input.value = Pilot.name() || '';
+  input.style.display = 'block';
+  // Tiny delay so the browser commits display:block before focus triggers keyboard
+  setTimeout(() => { input.focus(); input.select(); }, 30);
+}
+
+function closeNameEntry(save) {
+  const input = document.getElementById('name-input');
+  if (!input) { nameEntryActive = false; return; }
+  if (save !== false) {
+    Pilot.set(input.value);
+  }
+  input.value = '';
+  input.style.display = 'none';
+  input.blur();
+  nameEntryActive = false;
+  titleIdleT = 0;  // reset credits scroll
+}
+
+// Wire up the input — must run after the DOM is ready. p5's setup() runs after
+// DOMContentLoaded so we hook into load instead to be safe.
+window.addEventListener('load', () => {
+  const input = document.getElementById('name-input');
+  if (!input) return;
+  // Enter or blur = commit; Escape = cancel
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); closeNameEntry(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeNameEntry(false); }
+    // Block keys from bubbling to p5 while typing
+    e.stopPropagation();
+  });
+  input.addEventListener('blur', () => {
+    if (nameEntryActive) closeNameEntry(true);
+  });
+  // Force uppercase as user types
+  input.addEventListener('input', () => {
+    const cur = input.selectionStart;
+    input.value = input.value.toUpperCase().replace(/[^A-Z0-9 ]/g, '');
+    try { input.setSelectionRange(cur, cur); } catch (e) {}
+  });
+});

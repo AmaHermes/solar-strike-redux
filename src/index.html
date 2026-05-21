@@ -140,6 +140,40 @@
   <h1>SOLAR STRIKE</h1>
   <div id="game-frame">
     <div id="game"></div>
+    <!-- Hidden-but-focusable input for mobile keyboard.
+         Positioned over the canvas only when name-entry mode is active.
+         Tapping the title-screen "CHANGE NAME" zone focuses this input,
+         which triggers the on-screen keyboard on iOS/Android. -->
+    <input id="name-input"
+           type="text"
+           autocomplete="off"
+           autocapitalize="characters"
+           autocorrect="off"
+           spellcheck="false"
+           maxlength="12"
+           placeholder="PILOT NAME"
+           style="
+             position: absolute;
+             left: 50%;
+             top: 60%;
+             transform: translate(-50%, -50%);
+             width: 70%;
+             max-width: 280px;
+             padding: 8px 10px;
+             font-family: monospace;
+             font-size: clamp(14px, 3.5vmin, 22px);
+             letter-spacing: 2px;
+             text-align: center;
+             text-transform: uppercase;
+             background: rgba(10, 4, 24, 0.92);
+             color: var(--cream);
+             border: 2px solid var(--orange);
+             border-radius: 4px;
+             outline: none;
+             caret-color: var(--yellow);
+             display: none;
+             z-index: 10;
+           ">
   </div>
   <div class="hint hint-keyboard">
     Arrows / WASD = move &nbsp;·&nbsp; Auto-fire &nbsp;·&nbsp; M = music &nbsp;·&nbsp; N = SFX &nbsp;·&nbsp; SPACE = start
