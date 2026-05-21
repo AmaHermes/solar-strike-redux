@@ -1231,15 +1231,27 @@ function drawTitleOverlay(g) {
     g.fill(PAL.cream); g.textSize(7);
     const pl = 'PILOT: ' + playerName;
     g.text(pl, cx(pl), 76);
-    g.fill(PAL.mag); g.textSize(6);
-    const ch = '[N] = CHANGE NAME';
-    g.text(ch, cx(ch), 88);
+
+    // [N] CHANGE NAME — render as a tappable pill button so mobile users
+    // can clearly see it's interactive. The hit-test in touchStarted matches
+    // this rectangle (y 84-100, x 30-130).
+    const btnY = 84, btnH = 14;
+    const btnW = 100, btnX = Math.floor((GB_W - btnW) / 2);
+    g.noStroke();
+    g.fill(PAL.mag);
+    g.rect(btnX, btnY, btnW, btnH);
+    g.fill(PAL.orange);
+    g.rect(btnX, btnY, btnW, 1);
+    g.rect(btnX, btnY + btnH - 1, btnW, 1);
+    g.fill(PAL.cream); g.textSize(6);
+    const ch = 'TAP / [N] = CHANGE NAME';
+    g.text(ch, cx(ch), btnY + 9);
 
     // Blinking start prompt
     g.fill(PAL.yellow); g.textSize(8);
     if (frameCount % 60 < 40) {
       const sp = 'TAP / SPACE TO START';
-      g.text(sp, cx(sp), 116);
+      g.text(sp, cx(sp), 120);
     }
 
     g.fill(PAL.mag); g.textSize(5);
@@ -1539,8 +1551,9 @@ function touchStarted(event) {
     const ch = (canvas && canvas.height) || height;
     const tx = touches && touches.length > 0 ? (touches[0].x / cw) * GB_W : GB_W / 2;
     const ty = touches && touches.length > 0 ? (touches[0].y / ch) * GB_H : GB_H / 2;
-    // [N] CHANGE NAME tap-zone on title only (matches text at y≈88)
-    if (state === 'title' && ty > 80 && ty < 100 && tx > 20 && tx < 130) {
+    // [N] CHANGE NAME tap-zone on title only — matches the pill button
+    // drawn at y=84..98, x ~30..130 (button is centred at width 100).
+    if (state === 'title' && ty >= 82 && ty <= 102 && tx >= 25 && tx <= 135) {
       openNameEntry();
       return false;
     }
