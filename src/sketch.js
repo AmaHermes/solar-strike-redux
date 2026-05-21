@@ -2782,6 +2782,13 @@ const Pilot = {
 
 const Leaderboard = {
   KEY: 'ssr.leaderboard.v1',
+  // Universal API endpoint. Empty string = local-only mode. Set this after
+  // deploying the Cloudflare Worker (see leaderboard-api/README.md).
+  API: 'https://solar-strike-leaderboard.amahermes.workers.dev',
+  _remote: null,          // last fetched remote board (array)
+  _lastFetch: 0,          // ms timestamp of last successful fetch
+  _inflight: null,        // pending fetch promise
+
   load() {
     try {
       const raw = localStorage.getItem(this.KEY);
@@ -2794,13 +2801,55 @@ const Leaderboard = {
     try { localStorage.setItem(this.KEY, JSON.stringify(arr.slice(0, 20))); }
     catch (e) {}
   },
-  top(n) { return this.load().slice(0, n); },
+
+  // Refresh remote board in the background. Returns a promise.
+  // Throttled: at most once per 20s unless force=true.
+  refresh(force) {
+    if (!this.API) return Promise.resolve(null);
+    const now = Date.now();
+    if (!force && (now - this._lastFetch) < 20000 && this._remote) {
+      return Promise.resolve(this._remote);
+    }
+    if (this._inflight) return this._inflight;
+    this._inflight = fetch(this.API + '/scores', { method: 'GET' })
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((arr) => {
+        if (Array.isArray(arr)) {
+          this._remote = arr;
+          this._lastFetch = Date.now();
+        }
+        this._inflight = null;
+        return this._remote;
+      })
+      .catch(() => { this._inflight = null; return null; });
+    return this._inflight;
+  },
+
+  // Returns the best available board: remote if cached, else local.
+  // Triggers a background refresh as a side effect.
+  top(n) {
+    if (this.API) this.refresh(false);   // fire-and-forget
+    const src = this._remote || this.load();
+    return src.slice(0, n);
+  },
+
   submit(name, score, completed) {
     if (!name || score <= 0) return;
+    // Always save locally as fallback
     const arr = this.load();
     arr.push({ name, score, completed: !!completed, at: Date.now() });
     arr.sort((a, b) => b.score - a.score);
     this.save(arr);
+    // Then POST to remote if configured
+    if (this.API) {
+      fetch(this.API + '/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, score, completed: !!completed }),
+      })
+      .then(() => this.refresh(true))     // force-refresh after a successful post
+      .catch(() => {});                    // network failures are fine — local copy still works
+    }
   },
 };
 
