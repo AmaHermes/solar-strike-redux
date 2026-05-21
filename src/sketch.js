@@ -288,6 +288,7 @@ function updatePlay() {
       Audio.stageClear();
       Leaderboard.submit(Pilot.name(), score, true);
       titleIdleT = 0;
+      winIdleT = 0;
     }
   }
 }
@@ -1162,15 +1163,20 @@ function drawScene() {
 function drawTitleOverlay(g) {
   // Title block — stays anchored top
   g.fill(PAL.cream); g.textFont('monospace');
-  g.textSize(14); g.text('SOLAR STRIKE', 28, 38);
+  // Centre "SOLAR STRIKE" — 12 chars * ~9px @ size 14 = ~108px, frame is 160
+  g.textSize(14); g.text('SOLAR STRIKE', Math.floor((GB_W - 12 * 9) / 2), 38);
   g.fill(PAL.orange);
-  g.textSize(6); g.text('A SOLAR-SUNSET SHMUP', 32, 52);
+  g.textSize(6); g.text('A SOLAR-SUNSET SHMUP', Math.floor((GB_W - 20 * 4) / 2), 52);
 
   // After idle, scroll the leaderboard up like film credits
   titleIdleT++;
   const scrollStart = 180;          // 3s before credits start rolling
   const playerName = Pilot.name() || 'PILOT';
   const board = Leaderboard.top(5);
+
+  // Tiny helper: centre text horizontally based on monospace 4px-per-char @ small sizes.
+  // p5's textWidth gives us actual measured width — much more reliable.
+  const cx = (txt) => Math.floor((GB_W - g.textWidth(txt)) / 2);
 
   if (titleIdleT > scrollStart) {
     // Credits scroll: lines move from bottom toward top
@@ -1181,53 +1187,66 @@ function drawTitleOverlay(g) {
     let y = baseY;
     const lineH = 11;
 
-    // "PILOT LEADERBOARD" header
+    // "PILOT LEADERBOARD" header (centred)
     g.fill(PAL.orange); g.textSize(7);
-    g.text('PILOT LEADERBOARD', 24, y); y += lineH + 2;
+    const hdr = 'PILOT LEADERBOARD';
+    g.text(hdr, cx(hdr), y); y += lineH + 2;
 
     if (board.length === 0) {
       g.fill(PAL.cream); g.textSize(6);
-      g.text('NO SCORES YET', 42, y); y += lineH;
-      g.text('BE THE FIRST', 46, y);  y += lineH;
+      const l1 = 'NO SCORES YET';
+      const l2 = 'BE THE FIRST';
+      g.text(l1, cx(l1), y); y += lineH;
+      g.text(l2, cx(l2), y); y += lineH;
     } else {
       g.textSize(6);
+      // Fixed-width row format so alignment stays clean
       for (let i = 0; i < board.length; i++) {
         const row = board[i];
         const isYou = row.name === playerName;
         const rank = (i + 1) + '.';
         const nm   = row.name.padEnd(12, ' ');
         const sc   = String(row.score).padStart(7, ' ');
+        const line = rank + ' ' + nm + ' ' + sc;
         g.fill(isYou ? PAL.yellow : PAL.cream);
-        g.text(rank + ' ' + nm + ' ' + sc, 12, y);
+        g.text(line, cx(line), y);
         y += lineH;
       }
     }
 
-    // Tagline + cheeky BTC promise
+    // Tagline + cheeky BTC promise (all centred)
     y += lineH;
     g.fill(PAL.mag); g.textSize(6);
-    g.text('FLY THE SUN. FIGHT THE VOID.', 14, y); y += lineH;
+    const t1 = 'FLY THE SUN. FIGHT THE VOID.';
+    g.text(t1, cx(t1), y); y += lineH;
     g.fill(PAL.orange);
-    g.text('* WIN $100 BTC ON COMPLETION *', 8, y); y += lineH - 2;
+    const t2 = '* WIN $100 BTC ON COMPLETION *';
+    g.text(t2, cx(t2), y); y += lineH - 2;
     g.fill(PAL.mag); g.textSize(5);
-    g.text('* (worth 0.0000001 sats, terms apply)', 4, y);
+    const t3 = '* (worth 0.0000001 sats, terms apply)';
+    g.text(t3, cx(t3), y);
 
     // Reset when credits fully scroll off
     if (baseY < -200) titleIdleT = 0;
   } else {
-    // Pre-credits: show pilot name + start prompt
+    // Pre-credits: show pilot name + start prompt (all centred)
     g.fill(PAL.cream); g.textSize(7);
-    g.text('PILOT: ' + playerName, 30, 76);
-    // [N] tap-zone hint (visible always)
+    const pl = 'PILOT: ' + playerName;
+    g.text(pl, cx(pl), 76);
     g.fill(PAL.mag); g.textSize(6);
-    g.text('[N] = CHANGE NAME', 38, 88);
+    const ch = '[N] = CHANGE NAME';
+    g.text(ch, cx(ch), 88);
 
     // Blinking start prompt
     g.fill(PAL.yellow); g.textSize(8);
-    if (frameCount % 60 < 40) g.text('TAP / SPACE TO START', 18, 116);
+    if (frameCount % 60 < 40) {
+      const sp = 'TAP / SPACE TO START';
+      g.text(sp, cx(sp), 116);
+    }
 
     g.fill(PAL.mag); g.textSize(5);
-    g.text('ARROWS / WASD - AUTOFIRE - M / N AUDIO', 8, 138);
+    const ar = 'ARROWS / WASD - AUTOFIRE - M / N AUDIO';
+    g.text(ar, cx(ar), 138);
   }
 }
 function drawGameOverOverlay(g) {
@@ -1358,33 +1377,125 @@ function drawSkullFull(g, cx, cy, sliceY, sliceOff) {
   }
 }
 function drawWinOverlay(g) {
-  // Stage 3 victory = final game complete with credits
-  // (Stage 1 and 2 use the stagecard transition, so reaching 'win' means S3 cleared.)
+  // Stage 4 victory = full game completion. Anchored header + top-down rolling
+  // credits + leaderboard + a "redeemable" fake private key as the punchline.
   g.fill(PAL.cream); g.textFont('monospace');
-  g.textSize(12); g.text('GAME', 60, 36);
-  g.text('COMPLETE', 44, 52);
-  // Animated sun above the text
-  const cx = GB_W / 2, cy = 78;
-  const r = 8 + Math.sin(frameCount * 0.08) * 1.5;
-  g.fill(PAL.yellow);
-  g.ellipse(cx, cy, r * 2, r * 2);
-  g.fill(PAL.cream);
-  g.ellipse(cx, cy, r, r);
-  // Solar rays
+  const cx = (txt) => Math.floor((GB_W - g.textWidth(txt)) / 2);
+
+  // Anchored top: GAME COMPLETE banner
+  g.textSize(12);
+  g.text('GAME', cx('GAME'), 20);
+  g.text('COMPLETE', cx('COMPLETE'), 34);
+
+  // Animated sun (smaller, anchored)
+  const sx = GB_W / 2, sy = 54;
+  const r = 5 + Math.sin(frameCount * 0.08) * 1.2;
+  g.fill(PAL.yellow); g.ellipse(sx, sy, r * 2, r * 2);
+  g.fill(PAL.cream);  g.ellipse(sx, sy, r, r);
   g.fill(PAL.orange);
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2 + frameCount * 0.01;
-    const rx = cx + Math.cos(a) * (r + 4);
-    const ry = cy + Math.sin(a) * (r + 4);
+    const rx = sx + Math.cos(a) * (r + 3);
+    const ry = sy + Math.sin(a) * (r + 3);
     g.rect(Math.floor(rx), Math.floor(ry), 2, 2);
   }
-  // Score + credits
-  g.fill(PAL.cream); g.textSize(7);
-  g.text('SCORE ' + String(score).padStart(6, '0'), 38, 102);
-  g.fill(PAL.yellow); g.textSize(6);
-  g.text('A HERMES & RAZZ JOINT', 26, 118);
+
+  // Top-down rolling credits — start above the screen, scroll DOWN past it
+  winIdleT++;
+  const speed = 0.35;
+  // Lines start at y = -60 (above frame) and descend
+  const baseY = -60 + winIdleT * speed;
+
+  // Build the credits content. Capture pilot's own line first.
+  const playerName = Pilot.name() || 'PILOT';
+  const board = Leaderboard.top(5);
+  const lineH = 11;
+
+  // We start drawing below the anchored header area (clip line ~y=72)
+  const clipTop = 72;
+  let y = baseY;
+
+  // Pull off this little trick: only render lines that have entered below clipTop
+  const drawLine = (txt, color, size) => {
+    if (y >= clipTop && y < GB_H + 8) {
+      g.fill(color); g.textSize(size);
+      g.text(txt, cx(txt), y);
+    }
+    y += lineH;
+  };
+
+  drawLine('SCORE ' + String(score).padStart(6, '0'), PAL.cream, 7);
+  drawLine('PILOT ' + playerName, PAL.yellow, 7);
+  y += 2;
+  drawLine('PILOT LEADERBOARD', PAL.orange, 7);
+  if (board.length === 0) {
+    drawLine('NO OTHERS YET', PAL.cream, 6);
+  } else {
+    for (let i = 0; i < board.length; i++) {
+      const row = board[i];
+      const isYou = row.name === playerName;
+      const star  = row.completed ? '*' : ' ';
+      const rank  = (i + 1) + '.';
+      const nm    = row.name.padEnd(12, ' ');
+      const sc    = String(row.score).padStart(7, ' ');
+      drawLine(rank + ' ' + nm + ' ' + sc + ' ' + star, isYou ? PAL.yellow : PAL.cream, 6);
+    }
+  }
+  y += 4;
+  drawLine('* = STAGE 4 CLEARED', PAL.mag, 5);
+  y += 6;
+
+  // The cheeky reward 🤣
+  drawLine('PRIZE REDEMPTION', PAL.orange, 7);
+  drawLine('$100 BTC PRIVATE KEY', PAL.yellow, 6);
+  y += 2;
+  // Generate a fake-but-realistic-looking BIP32-ish private key (deterministic
+  // from pilot name so it's a stable joke per pilot).
+  const fakeKey = generateFakePrivateKey(playerName);
+  // Split into 4-char groups for readability
+  const chunks = fakeKey.match(/.{1,8}/g) || [fakeKey];
+  for (const c of chunks) drawLine(c, PAL.cream, 5);
+  y += 4;
+  drawLine('* DO NOT IMPORT - NOT REAL', PAL.mag, 5);
+  drawLine('* THE BIT IS THE JOKE :)', PAL.mag, 5);
+  y += 8;
+  drawLine('A HERMES & RAZZ JOINT', PAL.yellow, 6);
+  drawLine('🧀  THANKS FOR PLAYING  🧀', PAL.orange, 6);
+
+  // Reset when content has fully scrolled below the frame
+  if (baseY > GB_H + 40 && y < clipTop) winIdleT = 0;
+
+  // Replay prompt — anchored bottom, blinks
+  g.fill(0, 0, 0, 200);
+  g.rect(0, GB_H - 14, GB_W, 14);
   g.fill(PAL.orange); g.textSize(6);
-  if (frameCount % 60 < 40) g.text('SPACE TO REPLAY', 38, 134);
+  if (frameCount % 60 < 40) {
+    const sp = 'SPACE TO REPLAY';
+    g.text(sp, cx(sp), GB_H - 4);
+  }
+}
+
+// Deterministic fake "private key" — looks like 64 hex chars (256 bits).
+// Seeded by pilot name so the same pilot gets the same key (stable joke).
+// NOT cryptographically random, NOT a real key, NOT redeemable — that's the gag.
+function generateFakePrivateKey(seed) {
+  let h = 0;
+  const s = (seed || 'PILOT') + ':solar-strike-redux:fake-prize';
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  // Mulberry32-style PRNG seeded by hash → 64 hex chars
+  let out = '';
+  let state = (h >>> 0) || 0xdeadbeef;
+  for (let i = 0; i < 64; i++) {
+    state = (state + 0x6D2B79F5) | 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    const v = ((t ^ (t >>> 14)) >>> 0) & 0xF;
+    out += v.toString(16);
+  }
+  return out.toUpperCase();
 }
 
 // ---------- TOUCH INPUT ----------
@@ -2652,6 +2763,7 @@ function drawSingularity(g, e) {
 // Names are uppercase, max 12 chars, alphanumeric + space.
 
 let titleIdleT = 0;
+let winIdleT = 0;
 let nameEntryActive = false;
 
 const Pilot = {
