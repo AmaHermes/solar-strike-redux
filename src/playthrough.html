@@ -1,0 +1,193 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Hermes plays Solar Strike</title>
+<style>
+  html,body{margin:0;padding:0;background:#000;color:#fff;font-family:monospace}
+  #game{display:block;margin:0 auto}
+  canvas{image-rendering:pixelated;display:block}
+  #status{position:fixed;top:8px;left:8px;font-size:14px;color:#ff7;background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;z-index:99}
+</style>
+</head><body>
+<div id="status">booting…</div>
+<div id="game"></div>
+<script>
+  // Block audio so the recording is silent (no autoplay issues anyway)
+  window.AudioContext = window.AudioContext || function(){return {state:'suspended', resume:()=>Promise.resolve(), createBuffer:()=>({}), createBufferSource:()=>({connect:()=>({}),start:()=>{},stop:()=>{}}), createGain:()=>({connect:()=>({}),gain:{value:0,setValueAtTime:()=>{}}}), destination:{}, currentTime:0};};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="audio.js"></script>
+<script src="sketch.js"></script>
+<script>
+const $status = document.getElementById('status');
+function setStatus(s) { $status.textContent = s; console.log('[status]', s); }
+
+let recorder = null;
+let chunks = [];
+let recordingStarted = false;
+
+// =================== AUTOPILOT ===================
+let lastStartPressFrame = -999;
+function tryStartPress() {
+  // Throttle so we don't hammer keyPressed every frame on title/gameover
+  if (typeof frameCount !== 'undefined' && frameCount - lastStartPressFrame < 30) return;
+  lastStartPressFrame = (typeof frameCount !== 'undefined') ? frameCount : 0;
+  window.key = ' '; window.keyCode = 32;
+  try { keyPressed(); } catch(e) { console.warn(e); }
+}
+function autopilotTick() {
+  if (typeof state === 'undefined') return;
+
+  if (state === 'title') {
+    tryStartPress();
+    setTimeout(() => { try { lives = 9; } catch(e){} }, 200);
+    return;
+  }
+  if (state === 'stagecard' && stageCardTimer > 30) {
+    tryStartPress();
+    return;
+  }
+  if (state === 'gameover') {
+    tryStartPress();
+    setTimeout(() => { try { lives = 9; } catch(e){} }, 200);
+    return;
+  }
+  if (state === 'win') return;
+  if (state !== 'play') return;
+
+  // Keep lives topped up to 9 so the demo plays through.
+  if (lives < 4) lives = 9;
+
+  // -------- compute danger forces --------
+  let fx = 0, fy = 0;
+  const px = player.x, py = player.y;
+
+  // Enemy bullets — predict 15 frames ahead, very strong repulsion when close
+  let panic = false;
+  for (const b of eBullets) {
+    for (const t of [4, 10, 18]) {
+      const fdx = px - (b.x + b.vx * t);
+      const fdy = py - (b.y + b.vy * t);
+      const fd2 = Math.max(fdx*fdx + fdy*fdy, 1);
+      if (fd2 < 28*28) {
+        const strength = 1800 / fd2;
+        const fd = Math.sqrt(fd2);
+        fx += (fdx / fd) * strength;
+        fy += (fdy / fd) * strength;
+        if (fd2 < 14*14) panic = true;
+      }
+    }
+  }
+
+  // Enemies — strong repulsion, esp. those headed at us
+  for (const e of enemies) {
+    const dx = px - e.x, dy = py - e.y;
+    const d2 = dx*dx + dy*dy;
+    if (d2 < 30*30 && d2 > 0.01) {
+      const d = Math.sqrt(d2);
+      const strength = 600 / Math.max(d2, 1);
+      fx += (dx / d) * strength;
+      fy += (dy / d) * strength;
+    }
+  }
+
+  if (typeof boss !== 'undefined' && boss && !boss.dead) {
+    const dx = px - boss.x;
+    // Strafe sideways from boss
+    if (Math.abs(dx) < 24) {
+      fx += (dx >= 0 ? 1 : -1) * 2.8;
+    }
+    // Stay below the boss to keep shooting it
+    const dy = py - boss.y;
+    if (dy < 40) fy += 1.5; // push down
+  }
+
+  if (typeof flare !== 'undefined' && (flare.active || flare.warning > 0)) {
+    const dy = py - flare.y;
+    const safeMargin = (flare.height || 16) / 2 + 8;
+    if (Math.abs(dy) < safeMargin + 30) {
+      const sign = dy >= 0 ? 1 : -1;
+      fy += sign * 10;
+    }
+  }
+
+  for (const p of powerups) {
+    const dx = p.x - px, dy = p.y - py;
+    const d2 = dx*dx + dy*dy;
+    if (d2 < 70*70 && d2 > 1) {
+      const d = Math.sqrt(d2);
+      fx += (dx / d) * 1.2;
+      fy += (dy / d) * 0.7;
+    }
+  }
+
+  // home bias — middle-bottom (room to dodge both up and down)
+  fx += (80 - px) * 0.02;
+  fy += (100 - py) * 0.03;
+
+  const mag = Math.hypot(fx, fy);
+  if (mag > 0.001) {
+    const speed = Math.min(mag, panic ? 2.2 : 1.6);
+    player.x += (fx / mag) * speed;
+    player.y += (fy / mag) * speed;
+  }
+
+  player.x = Math.max(4, Math.min(GB_W - 4, player.x));
+  player.y = Math.max(4, Math.min(GB_H - 4, player.y));
+}
+
+function loop() {
+  try { autopilotTick(); } catch(e) { console.error(e); }
+  if (typeof state !== 'undefined' && typeof score !== 'undefined') {
+    setStatus(`state=${state} stage=${typeof stage!=='undefined'?stage:'?'} score=${score} lives=${lives} hp=${boss?boss.hp:'-'}`);
+  }
+  requestAnimationFrame(loop);
+}
+
+// Use setInterval as a more reliable driver — runs even if RAF stalls
+setInterval(() => {
+  try { autopilotTick(); } catch(e) { console.error(e); }
+  if (typeof state !== 'undefined' && typeof score !== 'undefined') {
+    setStatus(`state=${state} stage=${typeof stage!=='undefined'?stage:'?'} score=${score} lives=${lives} hp=${boss?boss.hp:'-'}`);
+  }
+}, 1000 / 60);
+
+// Start recording when canvas is ready
+function startRecording() {
+  const cnv = document.querySelector('#game canvas');
+  if (!cnv) { setTimeout(startRecording, 100); return; }
+  const stream = cnv.captureStream(30);
+  const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+    ? 'video/webm;codecs=vp9'
+    : 'video/webm';
+  recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_000_000 });
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+  recorder.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    setStatus(`uploading ${(blob.size/1024).toFixed(0)} KB…`);
+    try {
+      const res = await fetch('/upload', { method: 'POST', body: blob, headers: {'Content-Type': 'application/octet-binary'} });
+      setStatus(`uploaded! ${res.status}`);
+      document.title = 'DONE';
+    } catch(e) {
+      setStatus('upload err: ' + e.message);
+    }
+  };
+  recorder.start(1000);
+  recordingStarted = true;
+  setStatus('recording…');
+}
+
+setTimeout(() => { startRecording(); requestAnimationFrame(loop); }, 800);
+
+// Auto-stop recording when state==='win' for 5 seconds (final ending shown)
+let winFrames = 0;
+setInterval(() => {
+  if (typeof state !== 'undefined' && state === 'win') {
+    winFrames++;
+    if (winFrames > 50 && recordingStarted && recorder && recorder.state === 'recording') {
+      setStatus('finishing recording…');
+      recorder.stop();
+    }
+  }
+}, 100);
+</script>
+</body></html>

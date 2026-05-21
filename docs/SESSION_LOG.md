@@ -51,3 +51,19 @@
 
 **Files touched:** `src/sketch.js` only — collision handler, new `triggerBomb()`
 + `drawBombFX(g)` functions, render slot in `drawScene()`, reset in `resetGame()`.
+
+## Session 5 — 2026-05-21 (Thursday) — *Stage 4: EVENT HORIZON* 🕳️🌌
+**Done:**
+- **New finale stage** — Stage 4 "Event Horizon" added to the rotation.
+  Theme: you've fallen into a black hole. Spiralling starfield, accretion ripples,
+  central singularity pulsing on the field.
+- **Palette:** void black + deep purple + lilac violet + electric cyan + pale starlight.
+- **3 new enemies:**
+  - **Voidlings** — drift down, then get gravitationally pulled toward the centre
+  - **Quantum Twins** — paired mirrored sine-weavers (synchronised fire)
+  - **Phantoms** — teleport in, fade in/out, single sharp aimed shot
+- **Final boss — The Singularity** (100 HP, 3 phases):
+  - P1 (HP>60): rotating single spiral shot + gravitational pull on player
+  - P2 (HP≤60): 5-way aimed spread, stronger pull
+  - P3 (HP≤30): double-arm spiral + erratic micro-teleport flashes
+- **Title screen + stage card:** `[4] EVENT HORIZON` selectable, full-kit demo loadout.

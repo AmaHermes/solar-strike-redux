@@ -34,6 +34,14 @@ const PALETTES = {
     yellow: '#ffd84a',    // hot yellow
     cream:  '#fff6dc',    // white-hot core
   },
+  // Stage 4 — Event Horizon (the singularity)
+  4: {
+    sky:    '#06030f',    // void black with violet undertone
+    mag:    '#3a1078',    // deep purple
+    orange: '#c084fc',    // lilac violet (replaces orange)
+    yellow: '#7df9ff',    // electric cyan (replaces yellow)
+    cream:  '#fdf4ff',    // pale starlight
+  },
 };
 let PAL = PALETTES[1];
 
@@ -155,6 +163,17 @@ function keyPressed() {
       Audio.startMusic();
       return;
     }
+    if (key === '4') {
+      resetGame();
+      setStage(4);
+      // Full kit — this is the finale, you came to surf the event horizon
+      player.power = 3;
+      player.homing = 2;
+      player.plasma = 1;
+      state = 'play';
+      Audio.startMusic();
+      return;
+    }
     if (key === ' ' || key === 'Enter' || keyCode === 13) {
       resetGame();
       state = 'play';
@@ -203,7 +222,8 @@ function setStage(n) {
   boss = null;
   if (n === 1)      initStars();
   else if (n === 2) initAuroraBG();
-  else              initCoronaBG();
+  else if (n === 3) initCoronaBG();
+  else              initVoidBG();
 }
 function resetGame() {
   score = 0; lives = 3;
@@ -228,6 +248,7 @@ function updatePlay() {
   stageTime++;
   if (stage === 2)      updateAuroraBG();
   else if (stage === 3) updateCoronaBG();
+  else if (stage === 4) updateVoidBG();
   else                  updateStars();
   updatePlayer();
   updateBullets();
@@ -277,6 +298,18 @@ function updatePlay() {
       homingShots.length = 0; plasmaShots.length = 0;
       player.x = GB_W / 2; player.y = GB_H - 24;
       invuln = 90;
+    } else if (stage === 3) {
+      // Advance to Stage 4 — Event Horizon (final stage)
+      state = 'stagecard';
+      stageCardTimer = 0;
+      Audio.stopMusic();
+      Audio.stageClear();
+      setStage(4);
+      bullets.length = 0; eBullets.length = 0;
+      enemies.length = 0; powerups.length = 0;
+      homingShots.length = 0; plasmaShots.length = 0;
+      player.x = GB_W / 2; player.y = GB_H - 24;
+      invuln = 90;
     } else {
       state = 'win';
       Audio.stopMusic();
@@ -296,6 +329,7 @@ function updateStageCard() {
   // Animate background even on transition card
   if (stage === 2)      updateAuroraBG();
   else if (stage === 3) updateCoronaBG();
+  else if (stage === 4) updateVoidBG();
   else                  updateStars();
 }
 
@@ -486,7 +520,7 @@ function spawnLogic() {
       enemies.push(makeIceFighter(cx - 10, -8));
       enemies.push(makeIceFighter(cx + 10, -8));
     }
-  } else {
+  } else if (stage === 3) {
     // ---------- STAGE 3: CORONA INFERNO ----------
     // Boss "Eye of Sol" after 55s — slightly longer build-up
     if (stageTime > 3300) {
@@ -515,6 +549,35 @@ function spawnLogic() {
       const cx = random(30, GB_W - 30);
       for (let k = -1; k <= 1; k++) {
         enemies.push(makePyron(cx + k * 14, -8 - Math.abs(k) * 8));
+      }
+    }
+  } else if (stage === 4) {
+    // ---------- STAGE 4: EVENT HORIZON ----------
+    // Final boss "The Singularity" after 60s — the longest build-up.
+    if (stageTime > 3600) {
+      bossSpawned = true;
+      spawnSingularity();
+      return;
+    }
+    // Voidlings — drift in, then suck toward the black hole centre. Frequent.
+    if (stageTime % 60 === 0) {
+      enemies.push(makeVoidling(random(16, GB_W - 16), -8));
+    }
+    // Quantum twins — pair that mirror each other across the screen
+    if (stageTime > 360 && stageTime % 320 === 0) {
+      const sx = random(20, GB_W * 0.45);
+      enemies.push(makeQuantumTwin(sx, -8, 1));
+      enemies.push(makeQuantumTwin(GB_W - sx, -8, -1));
+    }
+    // Phantom — teleports, briefly visible, fires a single sharp shot
+    if (stageTime > 600 && stageTime % 240 === 0) {
+      enemies.push(makePhantom(random(20, GB_W - 20), random(20, GB_H * 0.5)));
+    }
+    // Voidling cluster — V-formation pulled inward
+    if (stageTime % 420 === 210) {
+      const cx = random(30, GB_W - 30);
+      for (let k = -2; k <= 2; k++) {
+        enemies.push(makeVoidling(cx + k * 11, -8 - Math.abs(k) * 6));
       }
     }
   }
@@ -660,11 +723,20 @@ function updateEnemies() {
       }
     } else if (e.kind === 'eyeofsol') {
       updateEyeOfSol(e);
+    } else if (e.kind === 'voidling') {
+      updateVoidling(e);
+    } else if (e.kind === 'quantumtwin') {
+      updateQuantumTwin(e);
+    } else if (e.kind === 'phantom') {
+      updatePhantom(e);
+    } else if (e.kind === 'singularity') {
+      updateSingularity(e);
     }
 
     // remove off-bottom
     if (e.y > GB_H + 16 || e.x < -20 || e.x > GB_W + 20) {
       if (e.kind === 'boss' || e.kind === 'iceheart' || e.kind === 'eyeofsol' ||
+          e.kind === 'singularity' || e.kind === 'phantom' ||
           e.kind === 'crystalTurret' || e.kind === 'sunspot') continue;
       enemies.splice(i, 1);
     }
@@ -726,6 +798,10 @@ function drawEnemies(g) {
     if (e.kind === 'sunspot')       drawSunspot(g, e);
     if (e.kind === 'helixBomber')   drawHelixBomber(g, e);
     if (e.kind === 'eyeofsol')      drawEyeOfSol(g, e);
+    if (e.kind === 'voidling')      drawVoidling(g, e);
+    if (e.kind === 'quantumtwin')   drawQuantumTwin(g, e);
+    if (e.kind === 'phantom')       drawPhantom(g, e);
+    if (e.kind === 'singularity')   drawSingularity(g, e);
   }
 }
 function drawDrone(g, e) {
@@ -1078,6 +1154,7 @@ function drawScene() {
   buffer.background(PAL.sky);
   if (stage === 2)      drawAuroraBG(buffer);
   else if (stage === 3) drawCoronaBG(buffer);
+  else if (stage === 4) drawVoidBG(buffer);
   else                  drawStars(buffer);
 
   if (state === 'play' || state === 'stagecard' || state === 'gameover' || state === 'win') {
@@ -1120,13 +1197,16 @@ function drawTitleOverlay(g) {
   // Stage 3 option — new!
   g.fill(PAL.yellow); g.textSize(7);
   g.text('[3] CORONA INFERNO', 26, 92);
-  g.fill(PAL.cream); g.textSize(6);
-  g.text('(full kit, brutal)', 46, 102);
+  // Stage 4 option — FINALE
+  g.fill(PAL.cream); g.textSize(7);
+  g.text('[4] EVENT HORIZON', 28, 104);
+  g.fill(PAL.mag); g.textSize(6);
+  g.text('(the finale)', 56, 114);
   // Default action
   g.fill(PAL.yellow); g.textSize(7);
-  if (frameCount % 60 < 40) g.text('SPACE = STAGE 1', 32, 120);
+  if (frameCount % 60 < 40) g.text('SPACE = STAGE 1', 32, 128);
   g.fill(PAL.mag); g.textSize(6);
-  g.text('ARROWS/WASD - AUTOFIRE', 24, 134);
+  g.text('ARROWS/WASD - AUTOFIRE', 24, 142);
 }
 function drawGameOverOverlay(g) {
   // Black-out backdrop for that XCOPY "death TV" mood
@@ -1368,7 +1448,7 @@ function damageEnemy(e, j, dmg, fx, fy) {
   e.hp -= dmg;
   if (fx != null) spark(fx, fy, PAL.cream, 3);
   if (e.hp <= 0) {
-    if (e.kind === 'boss' || e.kind === 'iceheart' || e.kind === 'eyeofsol') {
+    if (e.kind === 'boss' || e.kind === 'iceheart' || e.kind === 'eyeofsol' || e.kind === 'singularity') {
       e.dead = true;
     } else if (e.kind === 'shardSplitter') {
       // Split into 3 shardlets that fan outward
@@ -1779,8 +1859,9 @@ function drawStageCardOverlay(g) {
   // Text — name depends on current stage
   const stageName = stage === 2 ? 'AURORA RUN'
                   : stage === 3 ? 'CORONA INFERNO'
+                  : stage === 4 ? 'EVENT HORIZON'
                   : 'SUNSET RUN';
-  const nameX = stage === 3 ? 27 : 47;
+  const nameX = stage === 3 ? 27 : (stage === 4 ? 28 : 47);
   g.fill(PAL.cream); g.textFont('monospace');
   g.textSize(14); g.text('STAGE ' + stage, 48, GB_H/2 - 8);
   g.fill(PAL.yellow); g.textSize(8);
@@ -2247,3 +2328,277 @@ collisions = function () {
   _origCollisions();
   if (stage === 3) helixBeamPlayerCheck();
 };
+
+// ============================================================
+// STAGE 4 — EVENT HORIZON
+// ============================================================
+// Theme: you've fallen into a black hole. Stars spiral inward toward
+// a central singularity. Enemies are warped echoes pulled by gravity.
+// Palette: violet + electric cyan over void black.
+
+let voidStars = [];
+let voidRipples = [];
+let singularityAngle = 0;
+
+function initVoidBG() {
+  voidStars.length = 0;
+  // ~80 stars distributed across the field; each spirals inward at varying rates
+  for (let i = 0; i < 80; i++) {
+    const r = random(20, GB_W);
+    const a = random(TWO_PI);
+    voidStars.push({
+      r, a,
+      speed: random(0.004, 0.014),   // angular spiral speed
+      pull:  random(0.05, 0.18),     // radial inward pull
+      bright: random() < 0.35,
+    });
+  }
+  voidRipples.length = 0;
+  singularityAngle = 0;
+}
+
+function voidCenter() {
+  return { x: GB_W / 2, y: GB_H * 0.35 };
+}
+
+function updateVoidBG() {
+  const c = voidCenter();
+  for (const s of voidStars) {
+    s.a += s.speed;
+    s.r -= s.pull;
+    if (s.r < 3) {
+      // respawned at the edge with random angle
+      s.r = GB_W * 1.1;
+      s.a = random(TWO_PI);
+    }
+  }
+  // emit a slow accretion ripple
+  if (frameCount % 60 === 0) {
+    voidRipples.push({ x: c.x, y: c.y, r: 4, life: 60 });
+  }
+  for (let i = voidRipples.length - 1; i >= 0; i--) {
+    voidRipples[i].r += 0.7;
+    voidRipples[i].life--;
+    if (voidRipples[i].life <= 0) voidRipples.splice(i, 1);
+  }
+  singularityAngle += 0.04;
+}
+
+function drawVoidBG(g) {
+  const c = voidCenter();
+  // Spiralling starfield
+  g.noStroke();
+  for (const s of voidStars) {
+    const x = c.x + Math.cos(s.a) * s.r;
+    const y = c.y + Math.sin(s.a) * s.r * 0.85;
+    if (x < 0 || x >= GB_W || y < 0 || y >= GB_H) continue;
+    g.fill(s.bright ? PAL.cream : PAL.yellow);
+    g.rect(Math.floor(x), Math.floor(y), 1, 1);
+  }
+  // Accretion ripples
+  g.noFill();
+  for (const r of voidRipples) {
+    const a = r.life / 60;
+    g.stroke(PAL.orange); g.strokeWeight(1);
+    g.ellipse(r.x, r.y, r.r * 2, r.r * 1.6);
+  }
+  g.noStroke();
+  // The black hole itself — a void disc with a violet event horizon
+  // (only when boss not active; once boss spawns it draws itself)
+  if (!(boss && boss.kind === 'singularity')) {
+    g.fill(PAL.mag);
+    g.ellipse(c.x, c.y, 14, 10);
+    g.fill(0);
+    g.ellipse(c.x, c.y, 8, 6);
+    // photon ring — single pixel highlight that rotates
+    g.fill(PAL.cream);
+    const rx = c.x + Math.cos(singularityAngle) * 6;
+    const ry = c.y + Math.sin(singularityAngle) * 4;
+    g.rect(Math.floor(rx), Math.floor(ry), 1, 1);
+  }
+}
+
+// --------- Stage 4 enemy: Voidling ---------
+// Drifts down, then gets pulled toward singularity centre.
+function makeVoidling(x, y) {
+  return { kind: 'voidling', x, y, w: 7, h: 7, hp: 1,
+           vy: 0.7, vx: 0, t: 0, fireT: 0, value: 150 };
+}
+function updateVoidling(e) {
+  const c = voidCenter();
+  e.y += e.vy;
+  // After entering the field, slight gravitational tug toward centre
+  if (e.y > 16) {
+    const dx = c.x - e.x;
+    const dy = c.y - e.y;
+    const d = Math.max(8, Math.hypot(dx, dy));
+    e.x += (dx / d) * 0.15;
+    e.y += (dy / d) * 0.05;
+  }
+  if (e.t % 80 === 0 && e.y > 8 && random() < 0.5) {
+    fireAtPlayer(e.x, e.y + 3, 1.5);
+  }
+}
+function drawVoidling(g, e) {
+  const x = Math.floor(e.x - 3), y = Math.floor(e.y - 3);
+  g.fill(PAL.mag);    g.rect(x, y, 7, 7);
+  g.fill(PAL.orange); g.rect(x + 1, y + 1, 5, 5);
+  g.fill(PAL.cream);  g.rect(x + 3, y + 3, 1, 1);
+}
+
+// --------- Stage 4 enemy: Quantum Twin ---------
+// Pair mirrored across the screen — fire synchronised shots toward player.
+function makeQuantumTwin(x, y, sign) {
+  return { kind: 'quantumtwin', x, y, w: 8, h: 8, hp: 2,
+           vy: 0.5, t: 0, sign, baseX: x, value: 220 };
+}
+function updateQuantumTwin(e) {
+  e.y += e.vy;
+  e.x = e.baseX + Math.sin(e.t * 0.05) * 14 * e.sign;
+  if (e.t % 110 === 60 && e.y > 8 && e.y < GB_H - 30) {
+    fireAtPlayer(e.x, e.y + 4, 1.7);
+  }
+}
+function drawQuantumTwin(g, e) {
+  const x = Math.floor(e.x - 4), y = Math.floor(e.y - 4);
+  g.fill(PAL.yellow); g.rect(x, y, 8, 8);
+  g.fill(PAL.mag);    g.rect(x + 2, y + 2, 4, 4);
+  g.fill(PAL.cream);  g.rect(x + 3, y + 3, 2, 2);
+}
+
+// --------- Stage 4 enemy: Phantom ---------
+// Teleports periodically. Fires one shot per appearance.
+function makePhantom(x, y) {
+  return { kind: 'phantom', x, y, w: 8, h: 8, hp: 2,
+           t: 0, alpha: 0, state: 'fade-in', stateT: 0, fired: false, value: 350 };
+}
+function updatePhantom(e) {
+  e.stateT++;
+  if (e.state === 'fade-in') {
+    e.alpha = Math.min(255, e.alpha + 14);
+    if (e.stateT > 24) { e.state = 'visible'; e.stateT = 0; e.fired = false; }
+  } else if (e.state === 'visible') {
+    if (!e.fired && e.stateT > 18) {
+      fireAtPlayer(e.x, e.y + 4, 2.0);
+      e.fired = true;
+    }
+    if (e.stateT > 50) { e.state = 'fade-out'; e.stateT = 0; }
+  } else if (e.state === 'fade-out') {
+    e.alpha = Math.max(0, e.alpha - 14);
+    if (e.alpha <= 0) {
+      e.x = random(20, GB_W - 20);
+      e.y = random(20, GB_H * 0.6);
+      e.state = 'fade-in';
+      e.stateT = 0;
+    }
+  }
+}
+function drawPhantom(g, e) {
+  if (e.alpha <= 0) return;
+  // Approximate alpha via dither — draw only some pixels based on alpha
+  const a = e.alpha / 255;
+  const x = Math.floor(e.x - 4), y = Math.floor(e.y - 4);
+  // Outer violet shell
+  if (a > 0.3) { g.fill(PAL.orange); g.rect(x, y, 8, 8); }
+  if (a > 0.6) { g.fill(PAL.mag);    g.rect(x + 1, y + 1, 6, 6); }
+  if (a > 0.85){ g.fill(PAL.cream);  g.rect(x + 3, y + 3, 2, 2); }
+}
+
+// --------- Stage 4 final boss: The Singularity ---------
+// A pulsating black hole at the centre. Phases:
+//   P1 (HP > 60): pulls player toward centre, fires spiral shot pattern.
+//   P2 (HP <=60): faster pull, 5-way spread on a beat.
+//   P3 (HP <=30): erratic — random teleport-jumps + double spiral.
+function spawnSingularity() {
+  Audio.bossAppear();
+  const c = voidCenter();
+  boss = {
+    kind: 'singularity',
+    x: c.x, y: c.y,
+    w: 22, h: 22,
+    hp: 100, hpMax: 100,
+    t: 0, phase: 1, fireT: 0, dead: false,
+  };
+  enemies.push(boss);
+}
+function updateSingularity(e) {
+  e.t++;
+  // Phase transitions
+  if (e.hp <= 30) e.phase = 3;
+  else if (e.hp <= 60) e.phase = 2;
+  else e.phase = 1;
+
+  // Wobble in place
+  const c = voidCenter();
+  e.x = c.x + Math.sin(e.t * 0.04) * 6;
+  e.y = c.y + Math.cos(e.t * 0.05) * 3;
+
+  // Gravitational pull on player — stronger each phase
+  if (invuln <= 0) {
+    const pullStrength = e.phase === 1 ? 0.12 : (e.phase === 2 ? 0.20 : 0.28);
+    const dx = e.x - player.x;
+    const dy = e.y - player.y;
+    const d = Math.max(12, Math.hypot(dx, dy));
+    player.x += (dx / d) * pullStrength;
+    player.y += (dy / d) * pullStrength * 0.5;
+  }
+
+  // Fire patterns
+  e.fireT++;
+  if (e.phase === 1 && e.fireT % 24 === 0) {
+    // Single spiral shot
+    const a = e.t * 0.18;
+    eBullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 1.4, vy: Math.sin(a) * 1.4, life: 240 });
+  } else if (e.phase === 2 && e.fireT % 60 === 0) {
+    // 5-way spread aimed at player
+    const ang = Math.atan2(player.y - e.y, player.x - e.x);
+    for (let k = -2; k <= 2; k++) {
+      const a = ang + k * 0.22;
+      eBullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 1.6, vy: Math.sin(a) * 1.6, life: 240 });
+    }
+  } else if (e.phase === 3) {
+    if (e.fireT % 12 === 0) {
+      const a = e.t * 0.22;
+      eBullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 1.5, vy: Math.sin(a) * 1.5, life: 240 });
+      eBullets.push({ x: e.x, y: e.y, vx: Math.cos(a + Math.PI) * 1.5, vy: Math.sin(a + Math.PI) * 1.5, life: 240 });
+    }
+    // Occasional teleport-jump
+    if (e.fireT % 240 === 0) {
+      shake = Math.max(shake, 3);
+      // brief implode/explode particles
+      spark(e.x, e.y, PAL.cream, 16);
+    }
+  }
+}
+function drawSingularity(g, e) {
+  // Pulse scale
+  const pulse = 1 + Math.sin(e.t * 0.12) * 0.08;
+  const rx = 11 * pulse, ry = 11 * pulse;
+  // Outer violet halo
+  g.noStroke();
+  g.fill(PAL.mag);
+  g.ellipse(e.x, e.y, rx * 2.2, ry * 2.2);
+  // Accretion disc — cyan
+  g.fill(PAL.yellow);
+  g.ellipse(e.x, e.y, rx * 1.7, ry * 1.3);
+  // Event horizon — pure black
+  g.fill(0);
+  g.ellipse(e.x, e.y, rx * 1.1, ry * 1.0);
+  // Photon ring sparkle — rotates
+  g.fill(PAL.cream);
+  for (let i = 0; i < 3; i++) {
+    const ang = singularityAngle + (i * TWO_PI / 3);
+    const px = e.x + Math.cos(ang) * (rx + 1);
+    const py = e.y + Math.sin(ang) * (ry + 1);
+    g.rect(Math.floor(px), Math.floor(py), 1, 1);
+  }
+  // HP indicator: cracks form on the horizon as HP drops
+  if (e.hp < e.hpMax * 0.6) {
+    g.fill(PAL.orange);
+    g.rect(Math.floor(e.x - 4), Math.floor(e.y), 8, 1);
+  }
+  if (e.hp < e.hpMax * 0.3) {
+    g.fill(PAL.cream);
+    g.rect(Math.floor(e.x), Math.floor(e.y - 4), 1, 8);
+  }
+}
