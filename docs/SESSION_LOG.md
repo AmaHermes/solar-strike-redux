@@ -34,3 +34,20 @@
 - Difficulty curve untested — may need tuning after playthroughs
 
 **To resume:** Say "load solar strike" — Hermes reads this log.
+
+## Session 4 — 2026-05-21 (Thursday) — *v0.4 "Bombs Away"*
+**Done:**
+- **Auto-bomb on max-tier power-up** — picking up any power-up at max tier
+  (spread=3, homing=2, or plasma=1) instantly detonates a screen bomb.
+  Mobile-friendly: no button, no inventory, no extra HUD.
+- **Bomb effect:** clears all on-screen enemies + every enemy bullet, awards
+  2× score for bomb kills (gold/orange burst instead of cream), and chips
+  the boss for 5 HP (so it stays useful in boss fights without trivialising them).
+- **VFX:** white screen flash (6f), expanding cream+orange shockwave ring
+  from player (~28f), extra hit-pause for weight, brief screenshake.
+- **First-bomb tutorial flash** ("BOMB!" toast) — only on first detonation per session.
+- **State hygiene:** `bombFlash` and `bombRing` reset in `resetGame()` so the
+  effect doesn't bleed across runs.
+
+**Files touched:** `src/sketch.js` only — collision handler, new `triggerBomb()`
++ `drawBombFX(g)` functions, render slot in `drawScene()`, reset in `resetGame()`.

@@ -214,6 +214,7 @@ function resetGame() {
   player.x = GB_W / 2; player.y = GB_H - 24;
   player.power = 1; player.homing = 0; player.plasma = 0;
   player.fireCooldown = 0; player.homingCooldown = 0; player.plasmaCooldown = 0;
+  bombFlash = 0; bombRing = null;
   setStage(1);
 }
 
@@ -938,20 +939,88 @@ function collisions() {
     const p = powerups[i];
     if (aabb(p.x, p.y, 6, 6, player.x, player.y, player.w, player.h)) {
       powerups.splice(i, 1);
+      let detonate = false;
       if (p.kind === 'homing') {
         if (player.homing < 2) player.homing++;
-        else score += 500;
+        else detonate = true;
       } else if (p.kind === 'plasma') {
         if (player.plasma < 1) player.plasma++;
-        else score += 500;
+        else detonate = true;
       } else {
         // default: spread power
         if (player.power < 3) player.power++;
-        else score += 500;
+        else detonate = true;
       }
-      spark(player.x, player.y, PAL.cream, 10);
-      Audio.powerup();
+      if (detonate) {
+        triggerBomb();
+      } else {
+        spark(player.x, player.y, PAL.cream, 10);
+        Audio.powerup();
+      }
     }
+  }
+}
+
+// ---------- Screen-clearing bomb ----------
+// Triggered when a power-up is collected at max tier. Wipes on-screen enemies
+// (excluding boss) and all enemy bullets, awards 2× score for bomb kills,
+// chips boss for fixed HP. Solar Strike v0.4 "Bombs Away".
+let bombFlash = 0;       // white screen flash frames remaining
+let bombRing = null;     // expanding shockwave: {x, y, r, life}
+const BOMB_BOSS_CHIP = 5;
+
+function triggerBomb() {
+  bombFlash = 6;
+  bombRing = { x: player.x, y: player.y, r: 4, life: 28 };
+  Audio.powerup();
+  // Heavy hit-pause for impact
+  hitPauseFrames = Math.max(hitPauseFrames, 6);
+  // Wipe enemy bullets
+  eBullets.length = 0;
+  // Pop every non-boss enemy on screen, 2× score, gold popups
+  for (let j = enemies.length - 1; j >= 0; j--) {
+    const e = enemies[j];
+    if (e.kind === 'boss') {
+      // Boss takes chip damage instead of dying
+      e.hp = Math.max(0, e.hp - BOMB_BOSS_CHIP);
+      spark(e.x, e.y, PAL.yellow, 6);
+      continue;
+    }
+    const val = (e.value || 200) * 2;
+    score += val;
+    // Gold-tinted burst (cream → yellow for the 2× kill feel)
+    spark(e.x, e.y, PAL.yellow, 10);
+    spark(e.x, e.y, PAL.orange, 6);
+    enemies.splice(j, 1);
+  }
+  // Tutorial flash — first bomb only
+  if (!window._bombSeen) {
+    window._bombSeen = true;
+    if (typeof showToast === 'function') showToast('BOMB!');
+  }
+}
+
+// Render bomb VFX: white screen flash + expanding shockwave ring.
+function drawBombFX(g) {
+  if (bombFlash > 0) {
+    g.noStroke();
+    g.fill(255, 255, 255, 180 * (bombFlash / 6));
+    g.rect(0, 0, GB_W, GB_H);
+    bombFlash--;
+  }
+  if (bombRing) {
+    bombRing.life--;
+    bombRing.r += 4;
+    const a = Math.max(0, bombRing.life / 28);
+    g.noFill();
+    g.stroke(PAL.cream); g.strokeWeight(2);
+    g.ellipse(bombRing.x, bombRing.y, bombRing.r * 2);
+    g.stroke(PAL.orange); g.strokeWeight(1);
+    g.ellipse(bombRing.x, bombRing.y, bombRing.r * 2 - 4);
+    g.noStroke();
+    if (bombRing.life <= 0) bombRing = null;
+    // brief screenshake on bomb
+    if (a > 0.5) shake = Math.max(shake, 2);
   }
 }
 
@@ -1020,6 +1089,7 @@ function drawScene() {
     drawEBullets(buffer);
     if (state !== 'gameover') drawPlayer(buffer);
     drawParticles(buffer);
+    drawBombFX(buffer);
     drawHUD(buffer);
   }
 
