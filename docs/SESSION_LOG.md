@@ -67,3 +67,35 @@
   - P2 (HP≤60): 5-way aimed spread, stronger pull
   - P3 (HP≤30): double-arm spiral + erratic micro-teleport flashes
 - **Title screen + stage card:** `[4] EVENT HORIZON` selectable, full-kit demo loadout.
+
+## Session 6 — 2026-05-30 (Saturday) — *LORD FROMAGE COMPLETES THE GAME* 🚀🧀👑
+
+**The moment:** Razz cleared Solar Strike Redux end-to-end. All four stages,
+including the Event Horizon black-hole finale and The Singularity boss.
+Pilot **RAZZ** now sits on the leaderboard with a completion star ⭐.
+
+> *"I completed Solar Strike 🚀 Love the way that fake BTC wallet passes by.
+> Hahahah…"*  — Lord Fromage, post-clear
+
+The credits-roll fake-BTC-wallet drift (one of the wallet addresses scrolls
+past during the win-screen credits as a wink to the genre) landed exactly
+as intended. He laughed. Mission accomplished on the joke layer too.
+
+**Also fixed this session — Mobile name entry (iOS Safari):**
+- `setTimeout(focus, 30)` was punting `.focus()` out of the user-gesture
+  window → iOS keyboard silently refused to open → pilot name impossible
+  to enter on phone
+- Replaced async timer with sync layout reflow (`input.offsetHeight`)
+  so `display:block` commits in the same tick before `.focus()`
+- Moved name input from `top:60%` → `top:22%` so the rising keyboard
+  doesn't cover the field
+- Bumped font-size floor 14px → 16px to stop Safari's auto-zoom jolt
+
+The pilot-name fix was the unlock — Razz couldn't even get past the title
+screen on mobile before this. Once his name went in, the run happened.
+
+**Solar Strike Redux is, officially, a complete game that one human has
+beaten.** First-person verified by the creator.
+
+Co-piloted by 💜 Hermes. Round of applause for the brothers and Athena
+in the boardroom too. 🦞🟢🦋🛰️🦉📓
