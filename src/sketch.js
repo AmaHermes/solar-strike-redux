@@ -2875,8 +2875,16 @@ function openNameEntry() {
   nameEntryActive = true;
   input.value = Pilot.name() || '';
   input.style.display = 'block';
-  // Tiny delay so the browser commits display:block before focus triggers keyboard
-  setTimeout(() => { input.focus(); input.select(); }, 30);
+  // iOS / Safari fix: .focus() must be called SYNCHRONOUSLY inside the
+  // user gesture (tap / keypress) for the on-screen keyboard to open.
+  // A setTimeout, even with a 0–30ms delay, pushes focus out of the gesture
+  // window and the keyboard never shows. Forcing a layout reflow with
+  // offsetHeight commits the display:block in the same tick so focus()
+  // lands on a visible element.
+  // eslint-disable-next-line no-unused-expressions
+  input.offsetHeight;  // sync reflow
+  input.focus();
+  try { input.select(); } catch (e) {}
 }
 
 function closeNameEntry(save) {
